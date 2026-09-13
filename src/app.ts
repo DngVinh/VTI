@@ -28,6 +28,10 @@ export const createApp = (env: AppEnv = getEnv(), output: Logger = logger) => {
 
   app.use(requestContext);
   app.use(httpLogger(output));
+  app.use('/api/v1/admin/question-bank', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   app.use(
     helmet({
       strictTransportSecurity: env.NODE_ENV === "production" ? undefined : false,
@@ -47,6 +51,7 @@ export const createApp = (env: AppEnv = getEnv(), output: Logger = logger) => {
 
   app.use(
     cors({
+      exposedHeaders: ["ETag", "X-Request-Id", "Idempotency-Replayed"],
       origin: (origin, callback) => {
         if (!origin || allowedOrigins.has(origin)) {
           callback(null, true);

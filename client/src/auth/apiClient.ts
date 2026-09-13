@@ -73,6 +73,13 @@ export const refreshSession = () => {
   return refreshPromise;
 };
 
+export interface ApiResponseMetadata<T> {
+  data: T;
+  etag: string | null;
+  requestId: string | null;
+  status: number;
+}
+
 export const authenticatedFetch = async (
   path: string,
   init: RequestInit = {},
@@ -91,7 +98,11 @@ export const authenticatedFetch = async (
   return response;
 };
 
-export const request = async <T>(path: string, init: RequestInit = {}, canRetry = true): Promise<T> => {
+export const requestWithMetadata = async <T>(
+  path: string,
+  init: RequestInit = {},
+  canRetry = true
+): Promise<ApiResponseMetadata<T>> => {
   const normalizedPath = normalizePath(path);
   const method = (init.method ?? 'GET').toUpperCase();
   const noRefresh = AUTH_ENDPOINTS.has(normalizedPath.toLowerCase());
@@ -102,18 +113,35 @@ export const request = async <T>(path: string, init: RequestInit = {}, canRetry 
 
   const response = await fetch(endpoint(normalizedPath), { ...init, headers });
   if (response.ok) {
-    if (response.status === 204) return undefined as T;
-    const body = (await response.json()) as { data?: T };
-    return (body.data ?? body) as T;
+    if (response.status === 204) {
+      return {
+        data: undefined as T,
+        etag: response.headers.get('ETag'),
+        requestId: response.headers.get('X-Request-Id'),
+        status: response.status,
+      };
+    }
+    const body = (await response.json()) as { data?: T; requestId?: string };
+    return {
+      data: (body.data ?? body) as T,
+      etag: response.headers.get('ETag'),
+      requestId: body.requestId ?? response.headers.get('X-Request-Id'),
+      status: response.status,
+    };
   }
 
   if (response.status === 401 && canRetry && !noRefresh && method !== 'OPTIONS') {
     await refreshSession();
-    return request<T>(normalizedPath, init, false);
+    return requestWithMetadata<T>(normalizedPath, init, false);
   }
 
   if (response.status === 401 && !canRetry && !noRefresh) invalidateSession();
   throw await parseError(response);
+};
+
+export const request = async <T>(path: string, init: RequestInit = {}, canRetry = true): Promise<T> => {
+  const response = await requestWithMetadata<T>(path, init, canRetry);
+  return response.data;
 };
 
 export const login = (body: unknown) =>

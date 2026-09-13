@@ -1,7 +1,8 @@
-import  {
+import {
     AdminMetricsDateRange,
     AdminUserMetrics,
-    AdminInterviewMetrics
+    AdminInterviewMetrics,
+    AdminQuestionSourcingMetrics,
 } from '../../repositories/interfaces/IAdminMetricsRepository';
 
 export interface IAdminMetricsService {
@@ -10,5 +11,6 @@ export interface IAdminMetricsService {
     ): Promise<{
         users: AdminUserMetrics;
         interviews: AdminInterviewMetrics;
+        questionSourcing: AdminQuestionSourcingMetrics;
     }>;
 }

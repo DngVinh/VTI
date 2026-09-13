@@ -9,6 +9,9 @@
     "build": "tsc",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:contract": "vitest run tests/openapi-question-bank.contract.test.ts",
+    "benchmark:question-bank": "tsx scripts/question-bank-benchmark.ts",
+    "benchmark:question-bank:smoke": "tsx scripts/question-bank-benchmark.ts --dry-run --questions=1000 --versions=3000",
     "prepare": "husky",
     "db:seed": "tsx src/seeds/index.ts"
   },

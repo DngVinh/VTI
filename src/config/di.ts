@@ -27,6 +27,15 @@ import { AdminMetricsRepository } from '../repositories/admin-metrics.repository
 import { ApiRateLimitRepository } from '../repositories/api-rate-limit.repository';
 
 import { InterviewQuotaRepository } from '../repositories/interview-quota.repository';
+import { QuestionRepository } from '../repositories/question.repository';
+import { QuestionWorkflowRepository } from '../repositories/question-workflow.repository';
+import {
+  QuestionCounterRepository,
+  QuestionIdempotencyRepository,
+  QuestionOutboxRepository,
+  QuestionTaxonomyRepository,
+} from '../repositories/question-support.repository';
+import { QuestionEmbeddingRepository } from '../repositories/question-embedding.repository';
 
 // Services
 
@@ -43,6 +52,8 @@ import { SystemPromptService } from '../services/system-prompt.service';
 import { AdminMetricsService } from '../services/admin-metrics.service';
 
 import { InterviewQuotaService } from '../services/interview-quota.service';
+import { QuestionBankService } from '../services/question-bank.service';
+import { PublicQuestionService } from '../services/public-question.service';
 
 // AI Providers
 
@@ -57,6 +68,14 @@ import { AuditService } from '../services/audit.service';
 import { EvaluateAnswersJobHandler } from '../domain/jobs/handlers/EvaluateAnswersJobHandler';
 import { InterviewOperationProcessor } from '../services/InterviewOperationProcessor';
 import { OutboxDispatcher } from '../infrastructure/jobs/OutboxDispatcher';
+import { MockAiQuestionDraftProvider } from '../services/providers/mock-ai-question-draft.provider';
+import { GeminiAiQuestionDraftProvider } from '../services/providers/gemini-question-draft.provider';
+import { MockQuestionTranslationProvider } from '../services/providers/mock-question-translation.provider';
+import { GeminiQuestionTranslationProvider } from '../services/providers/gemini-question-translation.provider';
+import { MockQuestionEmbeddingProvider } from '../services/providers/mock-question-embedding.provider';
+import { GeminiQuestionEmbeddingProvider } from '../services/providers/gemini-question-embedding.provider';
+import { QuestionBankSelector } from '../domain/interview/question-source/QuestionBankSelector';
+import { InterviewQuestionGenerationOrchestrator } from '../domain/interview/question-source/InterviewQuestionGenerationOrchestrator';
 
 // Register Repositories
 
@@ -91,6 +110,14 @@ container.register('IApiRateLimitRepository', {
 container.register('IInterviewQuotaRepository', {
   useClass: InterviewQuotaRepository
 });
+
+container.register('IQuestionRepository', { useClass: QuestionRepository });
+container.register('IQuestionWorkflowRepository', { useClass: QuestionWorkflowRepository });
+container.register('IQuestionCounterRepository', { useClass: QuestionCounterRepository });
+container.register('IQuestionIdempotencyRepository', { useClass: QuestionIdempotencyRepository });
+container.register('IQuestionOutboxRepository', { useClass: QuestionOutboxRepository });
+container.register('IQuestionTaxonomyRepository', { useClass: QuestionTaxonomyRepository });
+container.register('IQuestionEmbeddingRepository', { useClass: QuestionEmbeddingRepository });
 
 // Register AI Provider based on .env
 
@@ -192,4 +219,24 @@ container.register('IInterviewQuotaService', {
   useClass: InterviewQuotaService
 });
 
+container.register('IQuestionBankService', { useClass: QuestionBankService });
+container.register('IPublicQuestionService', { useClass: PublicQuestionService });
+
+const useMockQuestionBankAi =
+  env.NODE_ENV === 'test' || env.QUESTION_BANK_AI_PROVIDER === 'mock';
+if (useMockQuestionBankAi) {
+  container.registerSingleton('IAiQuestionDraftProvider', MockAiQuestionDraftProvider);
+  container.registerSingleton('IQuestionTranslationProvider', MockQuestionTranslationProvider);
+  container.registerSingleton('IQuestionEmbeddingProvider', MockQuestionEmbeddingProvider);
+} else {
+  container.registerSingleton('IAiQuestionDraftProvider', GeminiAiQuestionDraftProvider);
+  container.registerSingleton('IQuestionTranslationProvider', GeminiQuestionTranslationProvider);
+  container.registerSingleton('IQuestionEmbeddingProvider', GeminiQuestionEmbeddingProvider);
+}
+
+container.register('IQuestionBankSelector', { useClass: QuestionBankSelector });
+container.registerSingleton(InterviewQuestionGenerationOrchestrator);
+container.register('InterviewQuestionGenerationOrchestrator', {
+  useToken: InterviewQuestionGenerationOrchestrator,
+});
 export { container };

@@ -4,6 +4,7 @@ import {
     AdminMetricsDateRange,
     AdminUserMetrics,
     AdminInterviewMetrics,
+    AdminQuestionSourcingMetrics,
     IAdminMetricsRepository
 } from '../repositories/interfaces/IAdminMetricsRepository';
 
@@ -24,15 +25,18 @@ export class AdminMetricsService
     ): Promise<{
         users: AdminUserMetrics;
         interviews: AdminInterviewMetrics;
+        questionSourcing: AdminQuestionSourcingMetrics;
     }> {
-        const [users, interviews] = await Promise.all([
+        const [users, interviews, questionSourcing] = await Promise.all([
             this.metricsRepository.getUserMetrics(),
-            this.metricsRepository.getInterviewMetrics(range)
+            this.metricsRepository.getInterviewMetrics(range),
+            this.metricsRepository.getQuestionSourcingMetrics(range),
         ]);
 
         return {
             users,
-            interviews
+            interviews,
+            questionSourcing,
         };
     }
 }

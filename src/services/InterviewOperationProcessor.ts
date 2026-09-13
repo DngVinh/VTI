@@ -15,6 +15,7 @@ import { classifyProviderError } from './ai/provider-errors';
 import { validateEvaluationResult, validateGeneratedQuestions } from './ai/output-validation';
 import { evaluateThroughBoundary, generateThroughBoundary } from './ai/prompt-security';
 import { resolveGenerationSetup } from './ai/job-security';
+import type { CandidateQuestionPayload } from '../domain/interview/question-source/types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -52,6 +53,21 @@ const usageFields = (usage: AiUsageMetadata) => ({
   totalTokens: usage.totalTokenCount
 });
 
+type GeneratedQuestionForCommit = {
+  order: number;
+  difficulty: string;
+  content: { en: string; vi: string };
+  sourceType?: CandidateQuestionPayload['sourceType'];
+  questionBankQuestionId?: string | null;
+  questionBankVersionId?: string | null;
+  questionBankVersionNumber?: number | null;
+  questionBankCode?: string | null;
+  selectionPolicyVersion?: string | null;
+  selectionSeedFingerprint?: string | null;
+  promptSnapshotHash?: string | null;
+  selectedAt?: Date | null;
+};
+
 @singleton()
 export class InterviewOperationProcessor {
   private readonly now: () => Date;
@@ -65,7 +81,9 @@ export class InterviewOperationProcessor {
   constructor(
     @inject('IAiProvider') private readonly aiProvider: IAiProvider,
     @inject('IEventPublisher') private readonly eventPublisher: IEventPublisher,
-    @inject('OperationProcessorOptions') options: OperationProcessorOptions = {}
+    @inject('OperationProcessorOptions') options: OperationProcessorOptions = {},
+    @inject('InterviewQuestionGenerationOrchestrator')
+    private readonly questionSourceOrchestrator?: import('../domain/interview/question-source/InterviewQuestionGenerationOrchestrator').InterviewQuestionGenerationOrchestrator,
   ) {
     this.now = options.now ?? (() => new Date());
     this.random = options.random ?? Math.random;
@@ -107,7 +125,7 @@ export class InterviewOperationProcessor {
       { $set: { status: 'UNKNOWN', safeErrorCode: 'WORKER_RESTARTED', finishedAt: now } }
     );
 
-    let generated: ReturnType<typeof validateGeneratedQuestions> | undefined;
+    let generated: GeneratedQuestionForCommit[] | undefined;
     let evaluated: ReturnType<typeof validateEvaluationResult> | undefined;
     let usage: AiUsageMetadata | undefined;
 
@@ -116,11 +134,24 @@ export class InterviewOperationProcessor {
         const interview = await InterviewSessionModel.findById(operation.targetId).lean();
         if (!interview) throw new Error('Missing interview aggregate');
         await this.startUsageAttempt(operation._id, operation.attempts, now);
-        const resolvedSetupData = await resolveGenerationSetup(interview.setupData);
-        const providerResult = await generateThroughBoundary(this.aiProvider, resolvedSetupData);
-        usage = providerResult.audit;
+        const useQuestionBank =
+          (process.env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED === 'true' ||
+            process.env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED === '1') &&
+          this.questionSourceOrchestrator;
+        if (useQuestionBank) {
+          const bundle = await this.questionSourceOrchestrator!.generateBundle(
+            operation.targetId.toString(),
+            interview.setupData,
+          );
+          usage = bundle.audit;
+          generated = bundle.questions;
+        } else {
+          const resolvedSetupData = await resolveGenerationSetup(interview.setupData);
+          const providerResult = await generateThroughBoundary(this.aiProvider, resolvedSetupData);
+          usage = providerResult.audit;
+          generated = validateGeneratedQuestions(providerResult.data);
+        }
         await this.recordObservedUsage(operation._id, operation.attempts, usage);
-        generated = validateGeneratedQuestions(providerResult.data);
       } else {
         const submission = await InterviewSubmissionModel.findOne({ operationId: operation._id }).lean();
         const questions = await InterviewQuestionModel.find({ sessionId: operation.targetId })
@@ -195,7 +226,7 @@ export class InterviewOperationProcessor {
   private async commitGeneratedQuestions(
     operation: any,
     leaseToken: string,
-    questions: ReturnType<typeof validateGeneratedQuestions>,
+    questions: GeneratedQuestionForCommit[],
     usage: AiUsageMetadata
   ): Promise<number | undefined> {
     return withTransaction(async (session) => {
@@ -209,9 +240,23 @@ export class InterviewOperationProcessor {
       await InterviewQuestionModel.insertMany(
         questions.map((question) => ({
           sessionId: operation.targetId,
+          ownerId: operation.actorId,
           order: question.order,
           difficulty: question.difficulty,
           content: question.content,
+          sourceType: question.sourceType ?? 'AI_GENERATED',
+          questionBankQuestionId: question.questionBankQuestionId
+            ? new mongoose.Types.ObjectId(question.questionBankQuestionId)
+            : null,
+          questionBankVersionId: question.questionBankVersionId
+            ? new mongoose.Types.ObjectId(question.questionBankVersionId)
+            : null,
+          questionBankVersionNumber: question.questionBankVersionNumber ?? null,
+          questionBankCode: question.questionBankCode ?? null,
+          selectionPolicyVersion: question.selectionPolicyVersion ?? null,
+          selectionSeedFingerprint: question.selectionSeedFingerprint ?? null,
+          promptSnapshotHash: question.promptSnapshotHash ?? null,
+          selectedAt: question.selectedAt ?? new Date(),
           candidateAnswer: null,
           answerVersion: operation.aggregateVersion
         })),

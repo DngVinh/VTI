@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../auth/authStore';
+import { featureFlags } from '../config/featureFlags';
 
 export const HomePage: React.FC = () => {
   const user = useAuthStore((state) => state.user);
@@ -44,6 +45,22 @@ export const HomePage: React.FC = () => {
           >
             {user ? 'Hồ sơ cá nhân' : 'Đăng nhập'}
           </Link>
+
+          <Link
+            to="/questions"
+            className="inline-flex justify-center items-center px-8 py-4 rounded-2xl text-lg font-bold text-indigo-700 bg-white hover:bg-indigo-50/60 border-2 border-indigo-200 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all"
+          >
+            📚 Ngân hàng câu hỏi
+          </Link>
+
+          {user?.role === 'ADMIN' && featureFlags.questionBankAdminUi && (
+            <Link
+              to="/admin/question-bank"
+              className="inline-flex justify-center items-center px-8 py-4 rounded-2xl text-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-500/30 transition-all"
+            >
+              Quản lý Question Bank
+            </Link>
+          )}
         </div>
       </div>
     </div>

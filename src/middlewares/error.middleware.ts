@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { ApiErrorDetail, ApiResponse } from '../types/response.type';
 import { logger, Logger, LogEvent } from '../infrastructure/logging/logger';
 import { logRoute } from './http-logger.middleware';
+import { QuestionBankDomainError } from '../domain/question-bank/errors';
 
 const defaultCodeByStatus: Record<number, string> = {
   400: 'BAD_REQUEST',
@@ -41,8 +42,42 @@ export const globalErrorHandler = (
   let code: string | undefined = typeof error?.code === 'string' ? error.code : undefined;
   let errors: ApiErrorDetail[] | undefined;
 
+  if (err instanceof QuestionBankDomainError) {
+    const statuses: Record<string, number> = {
+      VALIDATION_ERROR: 400,
+      QUESTION_SELECTION_FAILED: 400,
+      QUESTION_IMPORT_VALIDATION_FAILED: 400,
+      AI_PROVIDER_ERROR: 400,
+      AI_PROVIDER_RATE_LIMIT: 400,
+      AI_PROVIDER_TIMEOUT: 400,
+      AI_PROVIDER_SCHEMA_ERROR: 400,
+      QUESTION_TRANSLATION_SOURCE_MISSING: 400,
+      QUESTION_DUPLICATE_QUERY_INVALID: 400,
+      AUTH_UNAUTHORIZED: 401,
+      AUTH_FORBIDDEN: 403,
+      QUESTION_TRANSLATION_DISABLED: 403,
+      QUESTION_SEMANTIC_SEARCH_DISABLED: 403,
+      QUESTION_EMBEDDING_BACKFILL_DISABLED: 403,
+      QUESTION_BANK_FEATURE_DISABLED: 404,
+      QUESTION_NOT_FOUND: 404,
+      QUESTION_VERSION_NOT_FOUND: 404,
+      QUESTION_REVIEW_NOT_FOUND: 404,
+      QUESTION_TRANSLATION_OVERWRITE_CONFIRMATION_REQUIRED: 409,
+      QUESTION_EMBEDDING_BACKFILL_IN_PROGRESS: 409,
+      PRECONDITION_REQUIRED: 428,
+      QUESTION_TRANSLATION_SCHEMA_ERROR: 500,
+      QUESTION_EMBEDDING_INVALID_DIMENSIONS: 500,
+      QUESTION_EMBEDDING_PROVIDER_UNAVAILABLE: 503,
+      QUESTION_SEMANTIC_SEARCH_UNAVAILABLE: 503,
+      INTERNAL_SERVER_ERROR: 500,
+    };
+    statusCode = statuses[err.code] ?? 409;
+    message = err.message;
+    code = err.code;
+    errors = err.issues ? [...err.issues] : undefined;
+  }
   // Xử lý lỗi từ Zod Validation
-  if (err instanceof ZodError) {
+  else if (err instanceof ZodError) {
     statusCode = 400;
     message = 'Dữ liệu đầu vào không hợp lệ';
     code = 'VALIDATION_ERROR';

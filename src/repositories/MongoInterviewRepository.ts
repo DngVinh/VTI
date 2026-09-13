@@ -11,6 +11,8 @@ import {
   InterviewQuestionEntity
 } from './IInterviewRepository';
 
+import mongoose from 'mongoose';
+
 import {
   IInterviewAnalyticsRepository,
   InterviewAnalyticsQuery,
@@ -34,7 +36,10 @@ export class MongoInterviewRepository
     IInterviewHistoryRepository,
     IInterviewAnalyticsRepository
 {
-  constructor(private readonly ownerId?: string) {}
+  constructor(
+    private readonly ownerId?: string,
+    private readonly internalJobScope = false,
+  ) {}
 
   forOwner(ownerId: string): IInterviewRepository {
     if (!/^[a-f0-9]{24}$/i.test(ownerId)) {
@@ -46,6 +51,26 @@ export class MongoInterviewRepository
     }
 
     return new MongoInterviewRepository(ownerId);
+  }
+
+  /**
+   * Background generation is invoked only by the server-side operation
+   * processor. It retains a distinct system scope instead of weakening the
+   * public owner-scoped repository methods.
+   */
+  forInternalGeneration(): IInterviewRepository {
+    return new MongoInterviewRepository(undefined, true);
+  }
+
+  private sessionFilter(id: string, status?: InterviewStatus): Record<string, unknown> {
+    const filter: Record<string, unknown> = { _id: id };
+    if (this.ownerId) {
+      filter.userId = this.ownerId;
+    } else if (!this.internalJobScope) {
+      filter.userId = this.getOwnerId();
+    }
+    if (status) filter.status = status;
+    return filter;
   }
 
   getOwnerId(): string {
@@ -61,17 +86,8 @@ export class MongoInterviewRepository
   }
 
   private async assertSession(sessionId: string): Promise<void> {
-    if (
-      !await InterviewSessionModel.exists({
-        _id: sessionId,
-        userId: this.getOwnerId()
-      })
-    ) {
-      throw new AppError(
-        'Access denied',
-        403,
-        'AUTH_FORBIDDEN'
-      );
+    if (!await InterviewSessionModel.exists(this.sessionFilter(sessionId))) {
+      throw new AppError('Access denied', 403, 'AUTH_FORBIDDEN');
     }
   }
 
@@ -97,13 +113,9 @@ export class MongoInterviewRepository
   }
 
   async findById(id: string): Promise<InterviewEntity | null> {
-    const session = await InterviewSessionModel
-      .findOne({
-        _id: id,
-        userId: this.getOwnerId()
-      })
-      .lean();
-
+    const session = this.internalJobScope
+      ? await InterviewSessionModel.findById(id).lean()
+      : await InterviewSessionModel.findOne(this.sessionFilter(id)).lean();
     if (!session) {
       if (await InterviewSessionModel.exists({ _id: id })) {
         throw new AppError(
@@ -539,18 +551,9 @@ export class MongoInterviewRepository
   ): Promise<number | null> {
     await this.assertSession(id);
 
-    const filter: Record<string, unknown> = {
-      _id: id,
-      userId: this.getOwnerId()
-    };
-
-    if (expectedStatus !== undefined) {
-      filter.status = expectedStatus;
-    }
-
-    if (expectedVersion !== undefined) {
-      filter.version = expectedVersion;
-    }
+    const filter = this.sessionFilter(id);
+    if (expectedStatus !== undefined) filter.status = expectedStatus;
+    if (expectedVersion !== undefined) filter.version = expectedVersion;
 
     const updatePipeline = [
       ...terminalUpdate(status),
@@ -601,13 +604,8 @@ export class MongoInterviewRepository
 
     if (Object.keys(allowed).length > 0) {
       await InterviewSessionModel.updateOne(
-        {
-          _id: id,
-          userId: this.getOwnerId()
-        },
-        {
-          $set: allowed
-        }
+        this.sessionFilter(id),
+        { $set: allowed },
       );
     }
   }
@@ -619,10 +617,7 @@ export class MongoInterviewRepository
     await this.assertSession(id);
 
     await InterviewSessionModel.updateOne(
-      {
-        _id: id,
-        userId: this.getOwnerId()
-      },
+      this.sessionFilter(id),
       {
         $inc: {
           'metadata.promptTokens':
@@ -649,16 +644,8 @@ export class MongoInterviewRepository
     await this.assertSession(id);
 
     await InterviewSessionModel.updateOne(
-      {
-        _id: id,
-        userId: this.getOwnerId()
-      },
-      {
-        $set: {
-          [`promptVersions.${type}`]:
-            promptVersion
-        }
-      }
+      this.sessionFilter(id),
+      { $set: { [`promptVersions.${type}`]: promptVersion } },
     );
   }
 
@@ -698,36 +685,212 @@ export class MongoInterviewRepository
     );
   }
 
-  async updateQuestionAnswer(
-    questionId: string,
-    answer: string,
-    sessionId?: string
-  ): Promise<void> {
-    const resolvedSessionId =
-      sessionId ??
-      String(
-        (
-          await InterviewQuestionModel
-            .findById(questionId)
-            .select({ sessionId: 1 })
-            .lean()
-        )?.sessionId ?? ''
-      );
+  async commitInterviewQuestionsBundle(
+    sessionId: string,
+    bundle: import('../domain/interview/question-source/types').ExactFiveBundle,
+  ): Promise<InterviewEntity> {
+    await this.assertSession(sessionId);
+    const { InterviewQuestionBundleValidator } = await import(
+      '../domain/interview/question-source/InterviewQuestionBundleValidator'
+    );
+    InterviewQuestionBundleValidator.validate(bundle.questions);
 
-    await this.assertSession(
-      resolvedSessionId
+    const existingQuestions = await InterviewQuestionModel.find({ sessionId })
+      .sort({ order: 1 })
+      .lean();
+    if (existingQuestions.length === 5) {
+      const existing = await this.findById(sessionId);
+      if (!existing) {
+        throw new AppError('Interview session not found', 404, 'INTERVIEW_NOT_FOUND');
+      }
+      return existing;
+    }
+    if (existingQuestions.length > 0) {
+      throw new AppError(
+        `Phát hiện trạng thái câu hỏi không nhất quán (${existingQuestions.length} câu hỏi) cho session ${sessionId}`,
+        409,
+        'INTERVIEW_QUESTION_GENERATION_INCONSISTENT_STATE',
+      );
+    }
+
+    const docs = bundle.questions.map((question) => ({
+      sessionId: new mongoose.Types.ObjectId(sessionId),
+      ownerId: this.ownerId ?? undefined,
+      order: question.order,
+      difficulty: question.difficulty,
+      content: question.content,
+      sourceType: question.sourceType,
+      questionBankQuestionId: question.questionBankQuestionId
+        ? new mongoose.Types.ObjectId(question.questionBankQuestionId)
+        : null,
+      questionBankVersionId: question.questionBankVersionId
+        ? new mongoose.Types.ObjectId(question.questionBankVersionId)
+        : null,
+      questionBankVersionNumber: question.questionBankVersionNumber ?? null,
+      questionBankCode: question.questionBankCode ?? null,
+      selectionPolicyVersion: question.selectionPolicyVersion ?? null,
+      selectionSeedFingerprint: question.selectionSeedFingerprint ?? null,
+      promptSnapshotHash: question.promptSnapshotHash ?? null,
+      selectedAt: question.selectedAt ?? new Date(),
+      candidateAnswer: null,
+      feedback: null,
+      score: null,
+    }));
+
+    let committed = false;
+    try {
+      const mongoSession = await mongoose.startSession();
+      try {
+        await mongoSession.withTransaction(async () => {
+          const current = await InterviewSessionModel.findOne(
+            this.sessionFilter(sessionId)
+          ).session(mongoSession);
+          if (!current) {
+            throw new AppError('Interview session not found', 404, 'INTERVIEW_NOT_FOUND');
+          }
+          const count = await InterviewQuestionModel.countDocuments({ sessionId }).session(mongoSession);
+          if (count === 5) return;
+          if (count > 0) {
+            throw new AppError(
+              `Phát hiện trạng thái câu hỏi không nhất quán (${count} câu hỏi) cho session ${sessionId}`,
+              409,
+              'INTERVIEW_QUESTION_GENERATION_INCONSISTENT_STATE',
+            );
+          }
+          if (current.status !== 'GENERATING') {
+            throw new AppError(
+              `Phiên phỏng vấn đang ở trạng thái ${current.status}, không thể sinh câu hỏi`,
+              409,
+              'INTERVIEW_QUESTION_GENERATION_CONFLICT',
+            );
+          }
+
+          await InterviewQuestionModel.insertMany(docs, { session: mongoSession });
+          current.status = 'IN_PROGRESS';
+          current.metadata = current.metadata ?? {
+            promptTokens: 0,
+            candidatesTokens: 0,
+            totalTokens: 0,
+          };
+          current.metadata.promptTokens += bundle.audit.promptTokenCount;
+          current.metadata.candidatesTokens += bundle.audit.candidatesTokenCount;
+          current.metadata.totalTokens += bundle.audit.totalTokenCount;
+          await current.save({ session: mongoSession });
+          committed = true;
+        });
+      } finally {
+        await mongoSession.endSession();
+      }
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : '';
+      if (!message.includes('Transactions are not supported') && !message.includes('standalone')) {
+        throw error;
+      }
+
+      const fallbackResult = await this.commitBundleStandaloneFallback(sessionId, bundle);
+      committed = Boolean(fallbackResult);
+    }
+
+    if (!committed) {
+      const existing = await this.findById(sessionId);
+      if (existing) return existing;
+    }
+    const result = await this.findById(sessionId);
+    if (!result) {
+      throw new AppError('Interview session not found', 404, 'INTERVIEW_NOT_FOUND');
+    }
+    return result;
+  }
+
+  private async commitBundleStandaloneFallback(
+    sessionId: string,
+    bundle: import('../domain/interview/question-source/types').ExactFiveBundle,
+  ): Promise<InterviewEntity> {
+    const audit = bundle.audit;
+    const fallbackSessionFilter = this.ownerId
+      ? this.sessionFilter(sessionId, 'GENERATING')
+      : { _id: sessionId, status: 'GENERATING' };
+    const claimed = await InterviewSessionModel.findOneAndUpdate(
+      fallbackSessionFilter,
+      {
+        $set: { status: 'IN_PROGRESS' },
+        $inc: {
+          'metadata.promptTokens': audit.promptTokenCount,
+          'metadata.candidatesTokens': audit.candidatesTokenCount,
+          'metadata.totalTokens': audit.totalTokenCount,
+        },
+      },
+      { new: true },
     );
 
-    const result =
-      await InterviewQuestionModel.updateOne(
-        {
-          _id: questionId,
-          sessionId: resolvedSessionId
-        },
-        {
-          candidateAnswer: answer
-        }
+    if (!claimed) {
+      const existing = await this.findById(sessionId);
+      if (existing?.questions?.length === 5) return existing;
+      throw new AppError(
+        'Không thể claim trạng thái GENERATING',
+        409,
+        'INTERVIEW_QUESTION_GENERATION_CONFLICT',
       );
+    }
+
+    try {
+      const docs = bundle.questions.map((question) => ({
+        sessionId: new mongoose.Types.ObjectId(sessionId),
+        ownerId: this.ownerId ?? undefined,
+        order: question.order,
+        difficulty: question.difficulty,
+        content: question.content,
+        sourceType: question.sourceType,
+        questionBankQuestionId: question.questionBankQuestionId
+          ? new mongoose.Types.ObjectId(question.questionBankQuestionId)
+          : null,
+        questionBankVersionId: question.questionBankVersionId
+          ? new mongoose.Types.ObjectId(question.questionBankVersionId)
+          : null,
+        questionBankVersionNumber: question.questionBankVersionNumber ?? null,
+        questionBankCode: question.questionBankCode ?? null,
+        selectionPolicyVersion: question.selectionPolicyVersion ?? null,
+        selectionSeedFingerprint: question.selectionSeedFingerprint ?? null,
+        promptSnapshotHash: question.promptSnapshotHash ?? null,
+        selectedAt: question.selectedAt ?? new Date(),
+        candidateAnswer: null,
+        feedback: null,
+        score: null,
+      }));
+      await InterviewQuestionModel.insertMany(docs);
+      return this.mapToEntity(claimed);
+    } catch (insertError) {
+      const metadata = claimed.metadata ?? {
+        promptTokens: 0,
+        candidatesTokens: 0,
+        totalTokens: 0,
+      };
+      const rollbackSessionFilter = this.ownerId
+        ? this.sessionFilter(sessionId)
+        : { _id: sessionId };
+      await InterviewSessionModel.updateOne(rollbackSessionFilter, {
+        $set: {
+          status: 'FAILED',
+          metadata: {
+            promptTokens: Math.max(0, metadata.promptTokens - audit.promptTokenCount),
+            candidatesTokens: Math.max(0, metadata.candidatesTokens - audit.candidatesTokenCount),
+            totalTokens: Math.max(0, metadata.totalTokens - audit.totalTokenCount),
+          },
+        },
+      });
+      // Existing question documents are intentionally preserved. The caller
+      // must resolve any pre-existing partial state explicitly.
+      throw insertError;
+    }
+  }
+
+  async updateQuestionAnswer(questionId: string, answer: string, sessionId?: string): Promise<void> {
+    const resolvedSessionId = sessionId ?? String((await InterviewQuestionModel.findById(questionId).select({ sessionId: 1 }).lean())?.sessionId ?? '');
+    await this.assertSession(resolvedSessionId);
+    const result = await InterviewQuestionModel.updateOne(
+      { _id: questionId, sessionId: resolvedSessionId },
+      { candidateAnswer: answer },
+    );
 
     if (!result.matchedCount) {
       throw new AppError(
@@ -818,6 +981,19 @@ export class MongoInterviewRepository
       answerVersion: doc.answerVersion ?? 0,
       feedback: doc.feedback,
       score: doc.score,
+      sourceType: doc.sourceType,
+      questionBankQuestionId: doc.questionBankQuestionId
+        ? doc.questionBankQuestionId.toString()
+        : null,
+      questionBankVersionId: doc.questionBankVersionId
+        ? doc.questionBankVersionId.toString()
+        : null,
+      questionBankVersionNumber: doc.questionBankVersionNumber ?? null,
+      questionBankCode: doc.questionBankCode ?? null,
+      selectionPolicyVersion: doc.selectionPolicyVersion ?? null,
+      selectionSeedFingerprint: doc.selectionSeedFingerprint ?? null,
+      promptSnapshotHash: doc.promptSnapshotHash ?? null,
+      selectedAt: doc.selectedAt ?? null,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt
     };

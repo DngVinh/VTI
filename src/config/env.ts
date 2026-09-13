@@ -21,6 +21,13 @@ const placeholderSmtpValues = new Set([
 const expiresInRegex = /^(\d+)(ms|s|m|h|d|w|y)?$/i;
 const byteSizeRegex = /^(\d+)(b|kb|mb)$/i;
 
+const booleanFlag = (defaultValue: 'true' | 'false') =>
+  z
+    .enum(['true', 'false', '1', '0'])
+    .optional()
+    .default(defaultValue)
+    .transform((value) => value === 'true' || value === '1');
+
 const byteSizeSchema = (name: string, defaultValue: string, maxBytes: number) =>
   z
     .string()
@@ -330,6 +337,116 @@ const envSchema = z
         }
         return window;
       }),
+
+    // Question Bank rollout and provider policy. All operational features are
+    // disabled by default and must be enabled explicitly per environment.
+    QUESTION_BANK_ADMIN_API_ENABLED: booleanFlag('false'),
+    QUESTION_BANK_ADMIN_UI_ENABLED: booleanFlag('false'),
+    QUESTION_BANK_REVIEW_FOUR_EYES: booleanFlag('true'),
+    QUESTION_BANK_AI_TRANSLATION_ENABLED: booleanFlag('false'),
+    QUESTION_BANK_SEMANTIC_DUPLICATES_ENABLED: booleanFlag('false'),
+    QUESTION_BANK_EMBEDDING_BACKFILL_ENABLED: booleanFlag('false'),
+    QUESTION_BANK_AI_PROVIDER: z.enum(['gemini', 'mock']).optional().default('gemini'),
+    QUESTION_BANK_AI_MODEL: z.string().trim().min(1).optional().default('gemini-2.5-flash'),
+    QUESTION_BANK_TRANSLATION_MODEL: z.string().trim().min(1).optional().default('gemini-2.5-flash'),
+    QUESTION_BANK_EMBEDDING_MODEL: z.string().trim().min(1).optional().default('text-embedding-004'),
+    QUESTION_BANK_EMBEDDING_DIMENSIONS: z
+      .string()
+      .optional()
+      .default('768')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val > 0 && val <= 4096, {
+        message: 'QUESTION_BANK_EMBEDDING_DIMENSIONS must be an integer between 1 and 4096',
+      }),
+    QUESTION_BANK_AI_TIMEOUT_MS: z
+      .string()
+      .optional()
+      .default('10000')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 1000 && val <= 60000, {
+        message: 'QUESTION_BANK_AI_TIMEOUT_MS must be between 1000ms and 60000ms',
+      }),
+    QUESTION_BANK_AI_MAX_RETRIES: z
+      .string()
+      .optional()
+      .default('2')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 0 && val <= 5, {
+        message: 'QUESTION_BANK_AI_MAX_RETRIES must be between 0 and 5',
+      }),
+    QUESTION_BANK_SEMANTIC_THRESHOLD: z
+      .string()
+      .optional()
+      .default('0.75')
+      .transform((val) => parseFloat(val))
+      .refine((val) => !isNaN(val) && val >= 0.5 && val <= 0.99, {
+        message: 'QUESTION_BANK_SEMANTIC_THRESHOLD must be a float between 0.5 and 0.99',
+      }),
+    QUESTION_BANK_DUPLICATE_TOP_K: z
+      .string()
+      .optional()
+      .default('10')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 1 && val <= 20, {
+        message: 'QUESTION_BANK_DUPLICATE_TOP_K must be an integer between 1 and 20',
+      }),
+    INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED: booleanFlag('false'),
+    INTERVIEW_QUESTION_SOURCE_MODE: z
+      .enum(['AI_ONLY', 'SHADOW', 'BANK_ONLY', 'HYBRID'])
+      .optional()
+      .default('AI_ONLY'),
+    INTERVIEW_QUESTION_COUNT: z
+      .string()
+      .optional()
+      .default('5')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => val === 5, {
+        message: 'INTERVIEW_QUESTION_COUNT must be 5 in Phase 5',
+      }),
+    INTERVIEW_QUESTION_BANK_POLICY_VERSION: z.string().optional().default('v1'),
+    INTERVIEW_QUESTION_BANK_MIN_AVAILABLE: z
+      .string()
+      .optional()
+      .default('5')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 1 && val <= 50, {
+        message: 'INTERVIEW_QUESTION_BANK_MIN_AVAILABLE must be between 1 and 50',
+      }),
+    INTERVIEW_QUESTION_BANK_HYBRID_BANK_COUNT: z
+      .string()
+      .optional()
+      .default('2')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 1 && val <= 5, {
+        message: 'INTERVIEW_QUESTION_BANK_HYBRID_BANK_COUNT must be between 1 and 5',
+      }),
+    INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS: z
+      .string()
+      .optional()
+      .default('3000')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 500 && val <= 30000, {
+        message: 'INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS must be between 500 and 30000',
+      }),
+    INTERVIEW_QUESTION_BANK_ALLOW_FALLBACK_TO_AI: booleanFlag('true'),
+    INTERVIEW_QUESTION_BANK_ROLLOUT_PERCENT: z
+      .string()
+      .optional()
+      .default('100')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 0 && val <= 100, {
+        message: 'INTERVIEW_QUESTION_BANK_ROLLOUT_PERCENT must be an integer between 0 and 100',
+      }),
+    INTERVIEW_QUESTION_BANK_ROLLOUT_SALT: z.string().trim().min(1).optional().default('qb-rollout-salt'),
+    QUESTION_SOURCING_TELEMETRY_ENABLED: booleanFlag('true'),
+    QUESTION_SOURCING_EVENT_RETENTION_DAYS: z
+      .string()
+      .optional()
+      .default('90')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 7 && val <= 365, {
+        message: 'QUESTION_SOURCING_EVENT_RETENTION_DAYS must be between 7 and 365 days',
+      }),
   })
   .superRefine((data, ctx) => {
     if (data.RETENTION_MUTATION_ENABLED && !data.RETENTION_APPROVAL_ID) {
@@ -553,6 +670,34 @@ export interface AppEnv {
 
   RATE_LIMIT_PROGRESS_MAX: number;
   RATE_LIMIT_PROGRESS_WINDOW_MS: number;
+
+  QUESTION_BANK_ADMIN_API_ENABLED: boolean;
+  QUESTION_BANK_ADMIN_UI_ENABLED: boolean;
+  QUESTION_BANK_REVIEW_FOUR_EYES: boolean;
+  QUESTION_BANK_AI_TRANSLATION_ENABLED: boolean;
+  QUESTION_BANK_SEMANTIC_DUPLICATES_ENABLED: boolean;
+  QUESTION_BANK_EMBEDDING_BACKFILL_ENABLED: boolean;
+  QUESTION_BANK_AI_PROVIDER: 'gemini' | 'mock';
+  QUESTION_BANK_AI_MODEL: string;
+  QUESTION_BANK_TRANSLATION_MODEL: string;
+  QUESTION_BANK_EMBEDDING_MODEL: string;
+  QUESTION_BANK_EMBEDDING_DIMENSIONS: number;
+  QUESTION_BANK_AI_TIMEOUT_MS: number;
+  QUESTION_BANK_AI_MAX_RETRIES: number;
+  QUESTION_BANK_SEMANTIC_THRESHOLD: number;
+  QUESTION_BANK_DUPLICATE_TOP_K: number;
+  INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED: boolean;
+  INTERVIEW_QUESTION_SOURCE_MODE: 'AI_ONLY' | 'SHADOW' | 'BANK_ONLY' | 'HYBRID';
+  INTERVIEW_QUESTION_COUNT: number;
+  INTERVIEW_QUESTION_BANK_POLICY_VERSION: string;
+  INTERVIEW_QUESTION_BANK_MIN_AVAILABLE: number;
+  INTERVIEW_QUESTION_BANK_HYBRID_BANK_COUNT: number;
+  INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS: number;
+  INTERVIEW_QUESTION_BANK_ALLOW_FALLBACK_TO_AI: boolean;
+  INTERVIEW_QUESTION_BANK_ROLLOUT_PERCENT: number;
+  INTERVIEW_QUESTION_BANK_ROLLOUT_SALT: string;
+  QUESTION_SOURCING_TELEMETRY_ENABLED: boolean;
+  QUESTION_SOURCING_EVENT_RETENTION_DAYS: number;
 }
 
 let dotenvLoaded = false;

@@ -17,6 +17,15 @@ export interface InterviewQuestionEntity {
   answerVersion?: number;
   feedback: LocalizedContent | null;
   score: number | null;
+  sourceType?: 'AI_GENERATED' | 'QUESTION_BANK';
+  questionBankQuestionId?: string | null;
+  questionBankVersionId?: string | null;
+  questionBankVersionNumber?: number | null;
+  questionBankCode?: string | null;
+  selectionPolicyVersion?: string | null;
+  selectionSeedFingerprint?: string | null;
+  promptSnapshotHash?: string | null;
+  selectedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -81,6 +90,10 @@ export interface IInterviewRepository {
       'id' | 'sessionId' | 'createdAt' | 'updatedAt' | 'candidateAnswer' | 'feedback' | 'score'
     >[],
   ): Promise<InterviewQuestionEntity[]>;
+  commitInterviewQuestionsBundle(
+    sessionId: string,
+    bundle: import('../domain/interview/question-source/types').ExactFiveBundle,
+  ): Promise<InterviewEntity>;
   updateQuestionAnswer(questionId: string, answer: string, sessionId?: string): Promise<void>;
   updateQuestionFeedback(
     questionId: string,

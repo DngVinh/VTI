@@ -5,6 +5,7 @@ import { InterviewService } from '../services/InterviewService';
 import { IEventPublisher } from '../domain/events/IEventPublisher';
 import { AppError } from '../utils/AppError';
 import { catchAsync } from '../utils/catchAsync';
+import { toCandidateSafeInterviewSession } from '../domain/interview/safe-dto';
 
 @injectable()
 export class InterviewController {
@@ -93,7 +94,7 @@ export class InterviewController {
       req.user!._id.toString()
     );
 
-    res.status(201).json({ success: true, data: session });
+    res.status(201).json({ success: true, data: toCandidateSafeInterviewSession(session) });
   });
 
   /**
@@ -104,8 +105,8 @@ export class InterviewController {
       throw new AppError('JD file is required', 400, 'JD_FILE_REQUIRED');
     }
 
-    const { language, secondsPerQuestion, strategy } = req.body;
-    const setupData = { language, secondsPerQuestion, strategy };
+    const { jobPosition, level, techStacks, language, secondsPerQuestion, strategy } = req.body;
+    const setupData = { jobPosition, level, techStacks, language, secondsPerQuestion, strategy };
 
     try {
       const session = await this.interviewService.createInterviewSessionFromJD(
@@ -115,7 +116,7 @@ export class InterviewController {
         req.user!._id.toString(),
       );
 
-      res.status(201).json({ success: true, data: session });
+      res.status(201).json({ success: true, data: toCandidateSafeInterviewSession(session) });
     } finally {
       req.file.buffer.fill(0);
       req.file = undefined;
@@ -165,13 +166,8 @@ export class InterviewController {
    */
   getSession = catchAsync(async (req: Request, res: Response): Promise<void> => {
     const id = req.params.id as string;
-
-    const session = await this.interviewService.getInterviewSession(
-      id,
-      req.user!._id.toString()
-    );
-
-    res.status(200).json({ success: true, data: session });
+    const session = await this.interviewService.getInterviewSession(id, req.user!._id.toString());
+    res.status(200).json({ success: true, data: toCandidateSafeInterviewSession(session) });
   });
 
   /**
@@ -185,7 +181,7 @@ export class InterviewController {
     if (!idempotencyKey) {
       const session = await this.interviewService.generateQuestions(id, userId);
 
-      res.status(200).json({ success: true, data: session });
+      res.status(200).json({ success: true, data: toCandidateSafeInterviewSession(session) });
       return;
     }
 
@@ -208,13 +204,8 @@ export class InterviewController {
     const idempotencyKey = req.get('Idempotency-Key');
 
     if (!idempotencyKey || expectedVersion === undefined) {
-      const session = await this.interviewService.submitAnswers(
-        id,
-        answers,
-        userId
-      );
-
-      res.status(200).json({ success: true, data: session });
+      const session = await this.interviewService.submitAnswers(id, answers, userId);
+      res.status(200).json({ success: true, data: toCandidateSafeInterviewSession(session) });
       return;
     }
 

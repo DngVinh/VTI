@@ -68,6 +68,8 @@ export class InterviewService {
 
     @inject('ISystemPromptService')
     private readonly systemPromptService?: ISystemPromptService,
+    @inject('InterviewQuestionGenerationOrchestrator')
+    private readonly questionSourceOrchestrator?: import('../domain/interview/question-source/InterviewQuestionGenerationOrchestrator').InterviewQuestionGenerationOrchestrator,
   ) {}
 
   /**
@@ -299,21 +301,14 @@ export class InterviewService {
       );
     }
 
-    return this.interviewAnalyticsRepo.getAnalytics(
-      userId,
-      query,
-    );
+    return this.interviewAnalyticsRepo.getAnalytics(userId, query);
   }
 
   async generateQuestions(
     id: string,
     userId: string,
   ) {
-    const sessionData =
-      await this.getInterviewSession(
-        id,
-        userId,
-      );
+    const sessionData = await this.getInterviewSession(id, userId);
 
     if (!sessionData.setupData) {
       throw new AppError(
@@ -323,19 +318,26 @@ export class InterviewService {
       );
     }
 
-    const repository =
-      this.interviewRepo.forOwner(userId);
-
-    const context =
-      new InterviewContext(
+    const repository = this.interviewRepo.forOwner(userId);
+    const questionBankIntegrationEnabled =
+      process.env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED === 'true' ||
+      process.env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED === '1';
+    if (this.questionSourceOrchestrator && questionBankIntegrationEnabled) {
+      await this.questionSourceOrchestrator.generateAndCommit(
         id,
-        repository,
-        InterviewContext.createStateFromStatus(
-          sessionData.status,
-        ),
-        this.eventPublisher,
-        sessionData.version,
+        sessionData.setupData,
+        userId,
       );
+      return this.getInterviewSession(id, userId);
+    }
+
+    const context = new InterviewContext(
+      id,
+      repository,
+      InterviewContext.createStateFromStatus(sessionData.status),
+      this.eventPublisher,
+      sessionData.version,
+    );
 
     await this.recordPublishedPromptVersion(
       repository,
