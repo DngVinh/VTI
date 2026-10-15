@@ -10,11 +10,24 @@ export interface IInterviewEvaluationResultDocument extends Document {
     score: number;
   }>;
   overallScore: number;
-  dimensions: Array<{ name: string; score: number; reasoning: string }>;
+  dimensions: Array<{ name: string; score: number; reasoning: string | { en: string; vi: string } }>;
   learningPath: Array<{
     topic: { en: string; vi: string };
     priority: string;
     suggestion: { en: string; vi: string };
+  }>;
+  personaEvaluations?: Array<{
+    role: 'TECH_LEAD' | 'BAR_RAISER' | 'BEHAVIORAL' | 'JUDGE';
+    score: number;
+    strengths: Array<{ en: string; vi: string }>;
+    weaknesses: Array<{ en: string; vi: string }>;
+    specificFeedback: { en: string; vi: string };
+    dimensionScores?: Record<string, number>;
+  }>;
+  varianceFlags?: Array<{
+    dimension: string;
+    variance: number;
+    arbiterResolution: { en: string; vi: string };
   }>;
   createdAt: Date;
   updatedAt: Date;
@@ -39,12 +52,25 @@ const InterviewEvaluationResultSchema = new Schema<IInterviewEvaluationResultDoc
     dimensions: [{
       name: { type: String, required: true },
       score: { type: Number, min: 0, max: 10, required: true },
-      reasoning: { type: String, required: true }
+      reasoning: { type: Schema.Types.Mixed, required: true }
     }],
     learningPath: [{
       topic: { type: LocalizedSchema, required: true },
       priority: { type: String, enum: ['High', 'Medium', 'Low'], required: true },
       suggestion: { type: LocalizedSchema, required: true }
+    }],
+    personaEvaluations: [{
+      role: { type: String, enum: ['TECH_LEAD', 'BAR_RAISER', 'BEHAVIORAL', 'JUDGE'], required: true },
+      score: { type: Number, min: 0, max: 10, required: true },
+      strengths: [{ type: LocalizedSchema, required: true }],
+      weaknesses: [{ type: LocalizedSchema, required: true }],
+      specificFeedback: { type: LocalizedSchema, required: true },
+      dimensionScores: { type: Schema.Types.Mixed, default: {} }
+    }],
+    varianceFlags: [{
+      dimension: { type: String, required: true },
+      variance: { type: Number, min: 0, required: true },
+      arbiterResolution: { type: LocalizedSchema, required: true }
     }]
   },
   { timestamps: true }

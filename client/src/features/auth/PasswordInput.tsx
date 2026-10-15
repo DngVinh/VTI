@@ -16,6 +16,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
     return (
       <div className={`relative ${wrapperClassName}`}>
         <input
+          aria-label={inputProps['aria-label'] || visibilityLabel}
           {...inputProps}
           id={id}
           ref={ref}

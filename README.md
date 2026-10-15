@@ -26,6 +26,18 @@ Tính đến thời điểm hiện tại, dự án đã hoàn thành các hạng
 - **Database:** MongoDB (sử dụng Mongoose) - Multi-Document Transactions trên Replica Set.
 - **Mẫu Thiết Kế (Design Patterns):** State Pattern, Layered Architecture, Dependency Injection.
 
+## 🌱 Seed Question Bank mẫu
+
+Sau khi cấu hình `MONGODB_URI` và khởi động MongoDB Replica Set, chạy từ thư mục repository:
+
+```bash
+npm run db:seed
+```
+
+Lệnh này tạo 20 câu hỏi IT interview song ngữ đã ở trạng thái `ACTIVE/PUBLISHED`, có taxonomy, đáp án, giải thích và rubric để hiển thị ngay trong study library. Seeder nhận diện bằng `sourceReference` ổn định nên chạy lại không tạo trùng và không ghi đè câu hỏi người dùng. Không tự seed sample trong production; chỉ bật rõ ràng bằng `SEED_SAMPLE_QUESTION_BANK=true` khi thực sự cần.
+
+Kiểm tra thư viện user tại `http://localhost:5173/questions` (API: `GET /api/v1/questions/public`).
+
 ## 📐 Tuân thủ nghiêm ngặt nguyên tắc S.O.L.I.D
 
 Dự án được thiết kế cấu trúc thư mục và viết code theo đúng 5 nguyên tắc S.O.L.I.D để đảm bảo dễ bảo trì và mở rộng:

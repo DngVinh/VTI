@@ -112,6 +112,24 @@ describe('AIP-19 profile API', () => {
     expect(stored?.currentLevel).toBe(payload.currentLevel);
   });
 
+  it('accepts uploaded avatar url path (/uploads/avatars/...) in profile update', async () => {
+    const { user, authorization } = await createUser();
+    const payload = {
+      fullName: 'Avatar Candidate',
+      avatarUrl: '/uploads/avatars/avatar-6aadef0d9295dbf9d50889b3-1789786076652.jpg',
+    };
+
+    const updateResponse = await request(app)
+      .patch('/api/v1/profile')
+      .set('Authorization', authorization)
+      .send(payload);
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.data.avatarUrl).toBe(payload.avatarUrl);
+    const stored = await User.findById(user._id);
+    expect(stored?.avatarUrl).toBe(payload.avatarUrl);
+  });
+
   it('uses only the authenticated identity and never a query user id', async () => {
     const owner = await createUser('owner@example.com');
     const other = await createUser('other@example.com');
@@ -174,4 +192,52 @@ describe('AIP-19 profile API', () => {
       linkedinUrl: null,
     });
   });
+
+  describe('POST /api/v1/profile/avatar', () => {
+    it('requires authentication', async () => {
+      const response = await request(app).post('/api/v1/profile/avatar');
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe('AUTH_UNAUTHORIZED');
+    });
+
+    it('rejects upload without an avatar file', async () => {
+      const { authorization } = await createUser();
+      const response = await request(app)
+        .post('/api/v1/profile/avatar')
+        .set('Authorization', authorization);
+
+      expect(response.status).toBe(400);
+    });
+
+    it('rejects unsupported file extensions', async () => {
+      const { authorization } = await createUser();
+      const response = await request(app)
+        .post('/api/v1/profile/avatar')
+        .set('Authorization', authorization)
+        .attach('avatar', Buffer.from('fake pdf content'), 'test.pdf');
+
+      expect(response.status).toBe(400);
+    });
+
+    it('successfully uploads an image and updates user avatarUrl', async () => {
+      const { user, authorization } = await createUser();
+      // 1x1 transparent PNG buffer
+      const pngBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+
+      const response = await request(app)
+        .post('/api/v1/profile/avatar')
+        .set('Authorization', authorization)
+        .attach('avatar', pngBuffer, 'avatar.png');
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.avatarUrl).toMatch(/\/uploads\/avatars\/avatar-/);
+      expect(response.body.data.user.avatarUrl).toBe(response.body.data.avatarUrl);
+
+      // Verify DB persistence
+      const updatedUser = await User.findById(user._id);
+      expect(updatedUser?.avatarUrl).toBe(response.body.data.avatarUrl);
+    });
+  });
 });
+

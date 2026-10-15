@@ -127,4 +127,4 @@ npm run benchmark:question-bank:smoke
 npm run benchmark:question-bank
 ```
 
-Both benchmark commands are dry-run generators unless `--write` and all disposable-database confirmations are supplied. Never use `npm run db:seed` for this feature.
+Both benchmark commands are dry-run generators unless `--write` and all disposable-database confirmations are supplied. To provision the 20 bilingual sample questions for the candidate study library, run `npm run db:seed` in a development/test database. The seeder is idempotent and skips sample questions in production unless `SEED_SAMPLE_QUESTION_BANK=true` is set explicitly.

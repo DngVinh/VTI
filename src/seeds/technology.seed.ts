@@ -3,6 +3,8 @@ import Role from '../models/role.model';
 
 const technologies = [
   // Frontend
+  { code: 'JAVASCRIPT', name: 'JavaScript', roles: ['FRONTEND_DEVELOPER', 'BACKEND_DEVELOPER', 'FULLSTACK_DEVELOPER'] },
+  { code: 'TYPESCRIPT', name: 'TypeScript', roles: ['FRONTEND_DEVELOPER', 'BACKEND_DEVELOPER', 'FULLSTACK_DEVELOPER'] },
   { code: 'REACT', name: 'React', roles: ['FRONTEND_DEVELOPER', 'FULLSTACK_DEVELOPER'] },
   { code: 'VUEJS', name: 'Vue.js', roles: ['FRONTEND_DEVELOPER', 'FULLSTACK_DEVELOPER'] },
   { code: 'ANGULAR', name: 'Angular', roles: ['FRONTEND_DEVELOPER', 'FULLSTACK_DEVELOPER'] },
@@ -17,6 +19,7 @@ const technologies = [
   { code: 'DJANGO', name: 'Django (Python)', roles: ['BACKEND_DEVELOPER', 'FULLSTACK_DEVELOPER', 'DATA_SCIENTIST'] },
   { code: 'ASPNET', name: 'ASP.NET (C#)', roles: ['BACKEND_DEVELOPER', 'FULLSTACK_DEVELOPER'] },
   { code: 'GOLANG', name: 'Go', roles: ['BACKEND_DEVELOPER', 'DEVOPS_ENGINEER', 'CLOUD_ARCHITECT'] },
+  { code: 'MESSAGE_QUEUE', name: 'Message Queue', roles: ['BACKEND_DEVELOPER', 'FULLSTACK_DEVELOPER', 'DEVOPS_ENGINEER', 'CLOUD_ARCHITECT'] },
   
   // Database
   { code: 'POSTGRESQL', name: 'PostgreSQL', roles: ['BACKEND_DEVELOPER', 'FULLSTACK_DEVELOPER', 'DATA_ENGINEER'] },
@@ -28,6 +31,7 @@ const technologies = [
   { code: 'KUBERNETES', name: 'Kubernetes', roles: ['DEVOPS_ENGINEER', 'CLOUD_ARCHITECT'] },
   { code: 'AWS', name: 'AWS', roles: ['DEVOPS_ENGINEER', 'CLOUD_ARCHITECT', 'BACKEND_DEVELOPER', 'DATA_ENGINEER'] },
   { code: 'TERRAFORM', name: 'Terraform', roles: ['DEVOPS_ENGINEER', 'CLOUD_ARCHITECT'] },
+  { code: 'CI_CD', name: 'CI/CD', roles: ['DEVOPS_ENGINEER', 'CLOUD_ARCHITECT'] },
 
   // Mobile
   { code: 'REACT_NATIVE', name: 'React Native', roles: ['MOBILE_DEVELOPER'] },
@@ -47,6 +51,7 @@ const technologies = [
   { code: 'JEST', name: 'Jest', roles: ['QA_ENGINEER', 'FRONTEND_DEVELOPER', 'BACKEND_DEVELOPER'] },
   
   // Security
+  { code: 'WEB_SECURITY', name: 'Web Security', roles: ['SECURITY_ENGINEER', 'FRONTEND_DEVELOPER', 'BACKEND_DEVELOPER', 'FULLSTACK_DEVELOPER'] },
   { code: 'KALI_LINUX', name: 'Kali Linux', roles: ['SECURITY_ENGINEER'] },
   { code: 'BURP_SUITE', name: 'Burp Suite', roles: ['SECURITY_ENGINEER'] },
   

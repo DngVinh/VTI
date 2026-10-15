@@ -54,7 +54,7 @@ describe('Question Bank authoring components', () => {
     expect(rubric).toHaveLength(1);
   });
 
-  it('renders filters and forwards search, select, and taxonomy changes', async () => {
+  it('renders only the focused management filters', async () => {
     const user = userEvent.setup();
     const onSearchChange = vi.fn();
     const onChange = vi.fn();
@@ -71,10 +71,10 @@ describe('Question Bank authoring components', () => {
     expect(onSearchChange).toHaveBeenLastCalledWith('node');
     await user.selectOptions(screen.getByLabelText('Độ khó'), 'HARD');
     expect(onChange).toHaveBeenCalledWith('difficulty', 'HARD');
-    fireEvent.change(screen.getByLabelText('Role ID'), {
-      target: { value: ' 507f1f77bcf86cd799439011 ' },
-    });
-    expect(onChange).toHaveBeenLastCalledWith('roleId', '507f1f77bcf86cd799439011');
+    await user.selectOptions(screen.getByLabelText('Vòng đời'), 'RETIRED');
+    expect(onChange).toHaveBeenLastCalledWith('lifecycleStatus', 'RETIRED');
+    expect(screen.queryByLabelText('Role ID')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Technology ID')).not.toBeInTheDocument();
   });
 
   it('renders list fields with safe fallbacks and links', () => {
@@ -110,7 +110,11 @@ describe('Question Bank authoring components', () => {
       '/admin/question-bank/questions/507f1f77bcf86cd799439011'
     );
     expect(screen.getByText('Không xác định (FUTURE_TYPE)')).toBeInTheDocument();
-    expect(screen.getByText(/Tech: Agnostic/)).toBeInTheDocument();
+    expect(screen.getByText('Runtime')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Mở QB-2026-000001' })).toHaveAttribute(
+      'href',
+      '/admin/question-bank/questions/507f1f77bcf86cd799439011/edit'
+    );
   });
 
   it('renders every autosave state and enum fallback safely', () => {

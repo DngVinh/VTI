@@ -1,22 +1,27 @@
-import { IInterviewState, InterviewStatus } from '../IInterviewState';
-import { InterviewContext } from '../InterviewContext';
+import {
+  IInterviewState,
+  InterviewStatus,
+  IInterviewContext,
+  GeneratePayload,
+  SubmitPayload,
+  SaveProgressPayload,
+} from '../types';
 import { InvalidStateTransitionException } from '../exceptions/InvalidStateTransitionException';
-import { GeneratePayload, SubmitPayload } from '../types';
 
 export class EvaluatingState implements IInterviewState {
   getName(): InterviewStatus {
     return 'EVALUATING';
   }
 
-  async generate(context: InterviewContext, payload: GeneratePayload): Promise<void> {
+  async generate(_context: IInterviewContext, _payload: GeneratePayload): Promise<void> {
     throw new InvalidStateTransitionException('Cannot generate questions while EVALUATING answers.');
   }
 
-  async submit(context: InterviewContext, payload: SubmitPayload): Promise<void> {
+  async submit(_context: IInterviewContext, _payload: SubmitPayload): Promise<void> {
     throw new InvalidStateTransitionException('Interview is already in EVALUATING state. Answers were already submitted.');
   }
 
-  async saveProgress(context: InterviewContext, payload: import('../types').SaveProgressPayload): Promise<void> {
+  async saveProgress(_context: IInterviewContext, _payload: SaveProgressPayload): Promise<void> {
     throw new InvalidStateTransitionException('Cannot save progress while EVALUATING.');
   }
 }

@@ -21,11 +21,21 @@ export const httpLogger = (output: Logger = logger) => (req: Request, res: Respo
   const start = performance.now();
   let logged = false;
   res.locals.logger = output;
+  const rawLocale =
+    (typeof req.headers['accept-language'] === 'string'
+      ? req.headers['accept-language'].slice(0, 2).toLowerCase()
+      : undefined) ||
+    (typeof req.query.locale === 'string'
+      ? req.query.locale.slice(0, 2).toLowerCase()
+      : undefined);
+  const locale = rawLocale === 'vi' || rawLocale === 'en' ? rawLocale : undefined;
+
   const complete = (aborted: boolean) => {
     if (logged) return;
     logged = true;
     output.info(aborted ? 'http.aborted' : 'http.access', {
       requestId: req.requestId,
+      locale,
       route: logRoute(req), method: req.method,
       status: aborted ? 499 : res.statusCode,
       durationMs: Math.round((performance.now() - start) * 100) / 100,
@@ -34,5 +44,5 @@ export const httpLogger = (output: Logger = logger) => (req: Request, res: Respo
   };
   res.once('finish', () => complete(false));
   res.once('close', () => complete(!res.writableFinished));
-  logContext.run({ requestId: req.requestId }, next);
+  logContext.run({ requestId: req.requestId, locale }, next);
 };

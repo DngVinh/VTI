@@ -204,11 +204,12 @@ export class QuestionWorkflowRepository implements IQuestionWorkflowRepository {
     const question = await Question.findById(input.questionId).session(session);
     if (!question) return { kind: 'question-not-found' };
     if (question.lifecycleStatus !== 'ACTIVE') return { kind: 'retired' };
+    const sourceStatus = input.allowDraft ? 'DRAFT' : 'APPROVED';
     const targetCandidate = await QuestionVersion.findOne(
       {
         questionId: question._id,
         versionNumber: input.versionNumber,
-        status: 'APPROVED',
+        status: sourceStatus,
         revision: input.expectedRevision,
       }
     ).session(session);
@@ -218,7 +219,7 @@ export class QuestionWorkflowRepository implements IQuestionWorkflowRepository {
         versionNumber: input.versionNumber,
       }).session(session);
       if (!current) return { kind: 'version-not-found' };
-      if (current.status !== 'APPROVED') return { kind: 'invalid-state', currentState: current.status };
+      if (current.status !== sourceStatus) return { kind: 'invalid-state', currentState: current.status };
       return { kind: 'conflict', currentRevision: current.revision };
     }
 
@@ -248,7 +249,7 @@ export class QuestionWorkflowRepository implements IQuestionWorkflowRepository {
     }
 
     const target = await QuestionVersion.findOneAndUpdate(
-      { _id: targetCandidate._id, status: 'APPROVED', revision: input.expectedRevision },
+      { _id: targetCandidate._id, status: sourceStatus, revision: input.expectedRevision },
       { $set: { status: 'PUBLISHED', updatedBy: objectId(input.actorId) }, $inc: { revision: 1 } },
       { returnDocument: 'after', runValidators: true, session }
     );
@@ -281,7 +282,7 @@ export class QuestionWorkflowRepository implements IQuestionWorkflowRepository {
       actorId: input.actorId,
       action: 'PUBLISH',
       reason: input.reason,
-      fromState: 'APPROVED',
+      fromState: sourceStatus,
       toState: 'PUBLISHED',
       requestId: input.requestId,
     }, session);

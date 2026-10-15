@@ -7,6 +7,7 @@ import {
   QuestionTranslationOutput,
   QuestionTranslationPayload,
 } from '../interfaces/IQuestionTranslationProvider';
+import { getEnv } from '../../config/env';
 
 const translationResponseSchema = z.object({
   prompt: z.string().nullable().optional(),
@@ -41,13 +42,14 @@ export class GeminiQuestionTranslationProvider implements IQuestionTranslationPr
   private maxRetries: number;
 
   constructor() {
-    const apiKey = process.env.GEMINI_API_KEY || '';
+    const env = getEnv();
+    const apiKey = env.GEMINI_API_KEY || '';
     this.modelName =
-      process.env.QUESTION_BANK_TRANSLATION_MODEL ||
-      process.env.QUESTION_BANK_AI_MODEL ||
+      env.QUESTION_BANK_TRANSLATION_MODEL ||
+      env.QUESTION_BANK_AI_MODEL ||
       'gemini-2.5-flash';
-    this.timeoutMs = parseInt(process.env.QUESTION_BANK_AI_TIMEOUT_MS || '10000', 10);
-    this.maxRetries = parseInt(process.env.QUESTION_BANK_AI_MAX_RETRIES || '2', 10);
+    this.timeoutMs = env.QUESTION_BANK_AI_TIMEOUT_MS;
+    this.maxRetries = env.QUESTION_BANK_AI_MAX_RETRIES;
 
     if (apiKey.trim()) {
       this.genAI = new GoogleGenerativeAI(apiKey);

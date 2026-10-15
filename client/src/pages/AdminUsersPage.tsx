@@ -1,5 +1,4 @@
 import { useState } from 'react';
-
 import {
   AdminUserFilters,
   AdminUserTable,
@@ -11,9 +10,11 @@ import type {
   AdminUser,
   UserAction
 } from '../features/AdminUserManagement';
-
+import { AppShell } from '../layouts/AppShell';
+import { useTranslation } from '../locales/I18nContext';
 
 export const AdminUsersPage = () => {
+  const { t } = useTranslation();
   const {
     users,
     pagination,
@@ -67,36 +68,26 @@ export const AdminUsersPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Decorative background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-32 top-20 h-96 w-96 rounded-full bg-purple-300 opacity-30 blur-3xl" />
-
-        <div className="absolute -right-32 top-40 h-96 w-96 rounded-full bg-blue-300 opacity-30 blur-3xl" />
-
-        <div className="absolute bottom-0 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-indigo-300 opacity-20 blur-3xl" />
-      </div>
-
-      <main className="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <AppShell>
+      <div className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-sm font-bold text-indigo-700">
-            <span className="h-2 w-2 rounded-full bg-indigo-600" />
-
-            Admin
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-indigo-600" />
+            Admin Console
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-            User Management
+            {t('admin.usersTitle', 'Quản lý người dùng')}
           </h1>
 
-          <p className="mt-2 max-w-2xl text-slate-600">
-            Search, review and manage user accounts.
+          <p className="mt-2 max-w-2xl text-slate-600 text-sm">
+            {t('admin.usersSubtitle', 'Tìm kiếm, xem thông tin và phân quyền tài khoản người dùng trong hệ thống.')}
           </p>
         </div>
 
         {/* Main card */}
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
+        <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-xs">
           {/* Card header */}
           <div className="border-b border-slate-100 p-6">
             <AdminUserFilters
@@ -140,15 +131,15 @@ export const AdminUsersPage = () => {
           {/* Pagination */}
           <div className="flex flex-col gap-4 border-t border-slate-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-slate-500">
-              Showing page{' '}
+              {t('admin.page', 'Trang')}{' '}
               <span className="font-bold text-slate-700">
                 {pagination.page}
               </span>{' '}
-              of{' '}
+              /{' '}
               <span className="font-bold text-slate-700">
                 {pagination.totalPages}
               </span>{' '}
-              ({pagination.total} users)
+              ({pagination.total} {t('admin.usersCount', 'người dùng')})
             </p>
 
             <div className="flex items-center gap-2">
@@ -165,7 +156,7 @@ export const AdminUsersPage = () => {
                 }
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Previous
+                {t('admin.prev', 'Trước')}
               </button>
 
               <div className="flex h-10 min-w-10 items-center justify-center rounded-xl bg-indigo-600 px-3 text-sm font-bold text-white">
@@ -186,26 +177,26 @@ export const AdminUsersPage = () => {
                 }
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Next
+                {t('admin.next', 'Sau')}
               </button>
             </div>
           </div>
         </section>
-      </main>
 
-      {/* Confirmation modal */}
-      <ConfirmActionModal
-        user={selectedUser}
-        action={selectedAction}
-        isLoading={
-          selectedUser
-            ? actionLoadingId ===
-              selectedUser._id
-            : false
-        }
-        onConfirm={handleConfirmAction}
-        onCancel={handleCancelAction}
-      />
-    </div>
+        {/* Confirmation modal */}
+        <ConfirmActionModal
+          user={selectedUser}
+          action={selectedAction}
+          isLoading={
+            selectedUser
+              ? actionLoadingId ===
+                selectedUser._id
+              : false
+          }
+          onConfirm={handleConfirmAction}
+          onCancel={handleCancelAction}
+        />
+      </div>
+    </AppShell>
   );
 };

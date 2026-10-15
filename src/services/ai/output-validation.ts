@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { EvaluationResult, GeneratedQuestion } from '../../domain/interview/types';
 import { AiProviderContractError } from './provider-errors';
+import { logger } from '../../infrastructure/logging/logger';
 
 const localizedSchema = z.object({
   en: z.string().trim().min(1).max(4000),
@@ -24,32 +25,42 @@ const generatedQuestionsSchema = z.array(generatedQuestionSchema).length(5).supe
   }
 });
 
-export const RUBRIC_WEIGHTS = {
+export const RUBRIC_WEIGHTS: Record<string, number> = {
   TECHNICAL_ACCURACY: 0.35,
   PROBLEM_SOLVING: 0.30,
   COMMUNICATION: 0.15,
-  PRACTICAL_APPLICATION: 0.20
-} as const;
+  PRACTICAL_APPLICATION: 0.20,
+  'Technical Depth': 0.25,
+  'Problem Solving': 0.25,
+  'System Design & Best Practices': 0.20,
+  'Communication': 0.15,
+  'Practical Experience': 0.15,
+};
 
 const dimensionNameSchema = z.enum([
   'TECHNICAL_ACCURACY',
   'PROBLEM_SOLVING',
   'COMMUNICATION',
-  'PRACTICAL_APPLICATION'
+  'PRACTICAL_APPLICATION',
+  'Technical Depth',
+  'Problem Solving',
+  'System Design & Best Practices',
+  'Communication',
+  'Practical Experience',
 ]);
 
-const evaluationResultSchema = z.object({
+const createEvaluationResultSchema = (count: number) => z.object({
   evaluations: z.array(z.object({
     questionId: z.string().regex(/^[a-f\d]{24}$/i),
     feedback: localizedSchema,
     score: z.number().min(0).max(10)
-  }).strict()).length(5),
+  }).strict()).length(count),
   overallScore: z.number().min(0).max(10),
   dimensions: z.array(z.object({
     name: dimensionNameSchema,
     score: z.number().min(0).max(10),
-    reasoning: z.string().trim().min(1).max(4000)
-  }).strict()).length(4),
+    reasoning: z.union([z.string().trim().min(1).max(4000), localizedSchema])
+  }).strict()).min(4).max(5),
   learningPath: z.array(z.object({
     topic: localizedSchema,
     priority: z.enum(['High', 'Medium', 'Low']),
@@ -57,11 +68,12 @@ const evaluationResultSchema = z.object({
   }).strict()).max(20)
 }).strict();
 
+const evaluationResultSchema = createEvaluationResultSchema(5);
+
 const parseOrContractError = <T>(schema: z.ZodType<T>, value: unknown): T => {
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
-    console.error('ZOD VALIDATION FAILED:', JSON.stringify(parsed.error.format(), null, 2));
-    console.error('INPUT VALUE:', JSON.stringify(value, null, 2));
+    logger.error('ai.provider_failed');
     throw new AiProviderContractError();
   }
   return parsed.data;
@@ -74,7 +86,8 @@ export const validateEvaluationResult = (
   value: unknown,
   expectedQuestionIds: string[]
 ): EvaluationResult => {
-  const result = parseOrContractError(evaluationResultSchema, value);
+  const schema = createEvaluationResultSchema(expectedQuestionIds.length);
+  const result = parseOrContractError(schema, value);
   const expected = [...expectedQuestionIds].sort();
   const actual = result.evaluations.map((evaluation) => evaluation.questionId).sort();
   const dimensionNames = result.dimensions.map((dimension) => dimension.name);
@@ -90,7 +103,7 @@ export const validateEvaluationResult = (
 
   const overallScore = Math.round(
     result.dimensions.reduce(
-      (sum, dimension) => sum + dimension.score * RUBRIC_WEIGHTS[dimension.name],
+      (sum, dimension) => sum + dimension.score * (RUBRIC_WEIGHTS[dimension.name] ?? (1 / result.dimensions.length)),
       0
     ) * 10
   ) / 10;

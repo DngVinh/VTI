@@ -114,11 +114,26 @@ const httpUrlSchema = z
     }
   }, 'URL phải là đường dẫn tuyệt đối bắt đầu bằng http:// hoặc https://');
 
+const avatarUrlSchema = z
+  .string()
+  .trim()
+  .max(2048, 'URL không được vượt quá 2048 ký tự')
+  .refine((value) => {
+    if (value.startsWith('/uploads/') && !value.includes('..')) return true;
+    try {
+      const url = new URL(value);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, 'URL phải là đường dẫn tuyệt đối bắt đầu bằng http:// hoặc https:// hoặc đường dẫn /uploads/');
+
 const optionalProfileUrl = z.union([z.literal(''), httpUrlSchema]);
+const optionalAvatarUrl = z.union([z.literal(''), avatarUrlSchema]);
 
 export const profileSchema = z.object({
   fullName: z.string().trim().min(2, 'Họ và tên phải có ít nhất 2 ký tự').max(100, 'Họ và tên không được vượt quá 100 ký tự'),
-  avatarUrl: optionalProfileUrl,
+  avatarUrl: optionalAvatarUrl,
   currentLevel: z.union([z.literal(''), z.enum(PROFILE_LEVELS)]),
   githubUrl: optionalProfileUrl,
   linkedinUrl: optionalProfileUrl,

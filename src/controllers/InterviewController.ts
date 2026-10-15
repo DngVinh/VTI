@@ -124,6 +124,22 @@ export class InterviewController {
   });
 
   /**
+   * POST /api/interviews/practice-questions
+   */
+  createSessionFromQuestions = catchAsync(async (req: Request, res: Response): Promise<void> => {
+    const { questionIds } = req.body;
+    const session = await this.interviewService.createInterviewSessionFromQuestions(
+      questionIds,
+      req.user!._id.toString()
+    );
+
+    res.status(201).json({
+      success: true,
+      data: toCandidateSafeInterviewSession(session, { includePracticeProvenance: true }),
+    });
+  });
+
+  /**
    * GET /api/interviews/history
    */
   getHistory = catchAsync(async (req: Request, res: Response): Promise<void> => {
@@ -203,17 +219,21 @@ export class InterviewController {
     const userId = req.user!._id.toString();
     const idempotencyKey = req.get('Idempotency-Key');
 
-    if (!idempotencyKey || expectedVersion === undefined) {
+    if (!idempotencyKey) {
       const session = await this.interviewService.submitAnswers(id, answers, userId);
       res.status(200).json({ success: true, data: toCandidateSafeInterviewSession(session) });
       return;
     }
 
+    const resolvedVersion = expectedVersion !== undefined
+      ? expectedVersion
+      : (await this.interviewService.getInterviewSession(id, userId)).version;
+
     const result = await this.workflowService.submitAnswers(
       id,
       userId,
       idempotencyKey,
-      expectedVersion,
+      resolvedVersion,
       answers
     );
 
@@ -248,4 +268,35 @@ export class InterviewController {
 
     res.status(200).json({ success: true, data: result });
   });
+
+  /**
+   * POST /api/v1/interviews/:id/follow-up
+   */
+  requestFollowUp = catchAsync(async (req: Request, res: Response): Promise<void> => {
+    const id = req.params.id as string;
+    const { questionId, candidateAnswer } = req.body;
+    const userId = req.user!._id.toString();
+
+    const result = await this.interviewService.processFollowUp(
+      id,
+      { questionId, candidateAnswer },
+      userId
+    );
+
+    res.status(200).json({ success: true, data: result });
+  });
+
+  /**
+   * GET /api/v1/interviews/:id/conversation
+   */
+  getConversationHistory = catchAsync(async (req: Request, res: Response): Promise<void> => {
+    const id = req.params.id as string;
+    const questionId = req.query.questionId as string | undefined;
+    const userId = req.user!._id.toString();
+
+    const result = await this.interviewService.getConversationHistory(id, userId, questionId);
+
+    res.status(200).json({ success: true, data: result });
+  });
 }
+

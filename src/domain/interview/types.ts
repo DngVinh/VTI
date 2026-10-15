@@ -40,7 +40,7 @@ export interface EvaluatedAnswer {
 export interface EvaluationDimension {
   name: string;
   score: number;
-  reasoning: string;
+  reasoning: string | LocalizedContent;
 }
 
 export interface LearningPathItem {
@@ -100,6 +100,39 @@ export interface IAiProvider {
     data: LearningPathResult;
     audit: AiUsageMetadata;
   }>;
+
+  generateFollowUp?(
+    originalQuestion: LocalizedContent,
+    candidateAnswer: string,
+    history: Array<{ role: string; content: string }>,
+    systemPrompt?: SystemPromptContext
+  ): Promise<{
+    data: FollowUpResult;
+    audit: AiUsageMetadata;
+  }>;
+
+  evaluatePersona?(
+    prompt: { systemInstruction: string; userContent: string }
+  ): Promise<{
+    data: unknown;
+    audit: AiUsageMetadata;
+  }>;
+}
+
+export interface FollowUpPayload {
+  questionId: string;
+  candidateAnswer: string;
+  aiProvider?: IAiProvider;
+  systemPrompt?: SystemPromptContext;
+}
+
+export interface FollowUpResult {
+  shouldFollowUp: boolean;
+  followUpQuestion?: LocalizedContent;
+  gapAnalysis: Array<string | LocalizedContent>;
+  difficultyAdjustment?: 'EASIER' | 'SAME' | 'HARDER';
+  confidenceScore?: number;
+  summary: LocalizedContent;
 }
 
 export interface GeneratePayload {
@@ -126,8 +159,53 @@ export interface SubmitPayload {
   useAsyncJobs?: boolean;
 
   jobScheduler?: import('../jobs/IJobScheduler').IJobScheduler;
+
+  multiAgentEvaluator?: any;
+
+  conversationTurns?: any[];
 }
 
 export interface SaveProgressPayload {
   answers: AnswerPayload[];
 }
+
+export type InterviewStatus = 
+  | 'PENDING'
+  | 'GENERATING'
+  | 'IN_PROGRESS'
+  | 'FOLLOW_UP'
+  | 'EVALUATING'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export const LEGAL_INTERVIEW_STATUSES: readonly InterviewStatus[] = [
+  'PENDING',
+  'GENERATING',
+  'IN_PROGRESS',
+  'FOLLOW_UP',
+  'EVALUATING',
+  'COMPLETED',
+  'FAILED',
+] as const;
+
+export interface IInterviewState {
+  getName(): InterviewStatus;
+  generate(context: IInterviewContext, payload: GeneratePayload): Promise<void>;
+  submit(context: IInterviewContext, payload: SubmitPayload): Promise<void>;
+  saveProgress(context: IInterviewContext, payload: SaveProgressPayload): Promise<void>;
+}
+
+export interface IInterviewContextRepositoryRef {
+  getOwnerId(): string;
+  [key: string]: any;
+}
+
+export interface IInterviewContext {
+  getInterviewId(): string;
+  getState(): IInterviewState;
+  getRepository(): IInterviewContextRepositoryRef;
+  getVersion(): number;
+  getEventPublisher?(): import('../events/IEventPublisher').IEventPublisher | undefined;
+  changeState(newState: IInterviewState | InterviewStatus): Promise<void>;
+}
+

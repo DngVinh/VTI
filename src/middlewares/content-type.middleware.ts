@@ -2,7 +2,10 @@ import { NextFunction, Request, Response } from 'express';
 import { AppError } from '../utils/AppError';
 
 const bodyMethods = new Set(['POST', 'PUT', 'PATCH']);
-const multipartRoutes = new Set(['/api/v1/interviews/generate-from-jd']);
+const multipartRoutes = new Set([
+  '/api/v1/interviews/generate-from-jd',
+  '/api/v1/profile/avatar',
+]);
 
 export const enforceContentType = (req: Request, _res: Response, next: NextFunction): void => {
   if (!bodyMethods.has(req.method)) {

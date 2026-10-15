@@ -36,4 +36,14 @@ export class PublicQuestionController {
       data: result,
     });
   });
+
+  getPublicTaxonomy = catchAsync(async (req: Request, res: Response) => {
+    const roleId = req.query.roleId as string | undefined;
+    const result = await this.publicQuestionService.getPublicTaxonomy(roleId);
+    res.status(200).json({
+      success: true,
+      message: 'Lấy danh mục taxonomy thành công',
+      data: result,
+    });
+  });
 }

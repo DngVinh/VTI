@@ -86,23 +86,23 @@ export function AuthForm<T extends FieldValues>({
         </div>
       )}
 
-      <fieldset disabled={loading} className="space-y-5 disabled:opacity-90">
+      <fieldset disabled={loading} className="space-y-4 disabled:opacity-90">
         {fields.map((field) => {
           const fieldError = get(errors, field.name);
           const errorId = `${field.name}-error`;
           const hasError = Boolean(fieldError);
           const isPassword = field.type === 'password';
-          const inputClassName = `w-full rounded-xl border-2 px-4 py-3.5 font-medium text-slate-800 outline-none transition placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100 ${
+          const inputClassName = `w-full rounded-xl border px-3.5 py-2.5 text-sm font-normal text-slate-900 outline-none transition placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100 shadow-xs ${
             hasError
-              ? 'border-red-300 bg-red-50/40 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
-              : 'border-slate-100 bg-slate-50 hover:border-slate-200 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10'
+              ? 'border-red-300 bg-red-50/40 focus:border-red-500 focus:ring-2 focus:ring-red-500/10'
+              : 'border-slate-300 bg-white hover:border-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100'
           }`;
 
           return (
             <div key={field.name}>
               <label
                 htmlFor={field.name}
-                className="mb-2 block text-sm font-semibold text-slate-700"
+                className="mb-1.5 block text-sm font-medium text-slate-700"
               >
                 {field.label}
               </label>
@@ -131,7 +131,7 @@ export function AuthForm<T extends FieldValues>({
                 <p
                   id={errorId}
                   role="alert"
-                  className="mt-2 flex items-center gap-2 text-sm font-medium text-red-600"
+                  className="mt-1.5 flex items-center gap-2 text-sm font-medium text-red-600"
                 >
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" aria-hidden="true" />
                   {String(fieldError.message)}
@@ -144,10 +144,10 @@ export function AuthForm<T extends FieldValues>({
         <button
           type="submit"
           disabled={loading}
-          className={`flex w-full items-center justify-center rounded-xl px-6 py-3.5 text-base font-bold text-white shadow-lg transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/20 ${
+          className={`flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 active:scale-[0.99] ${
             loading
-              ? 'cursor-not-allowed bg-slate-400 shadow-slate-300/40'
-              : 'bg-gradient-to-r from-indigo-600 to-purple-600 shadow-indigo-500/25 hover:-translate-y-0.5 hover:from-indigo-700 hover:to-purple-700 hover:shadow-indigo-500/35'
+              ? 'cursor-not-allowed bg-slate-400'
+              : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200/50'
           }`}
         >
           {loading ? (

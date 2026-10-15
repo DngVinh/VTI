@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { QuestionBankNav } from '../components/QuestionBankNav';
 import { questionBankApi, createIdempotencyKey } from '../api/questionBankApi';
+import { AppShell } from '../../../layouts/AppShell';
 import { SemanticDuplicatePanel } from '../components/SemanticDuplicatePanel';
 import type { QuestionAiDraftResult, Difficulty, QuestionType } from '../types';
 import { enumLabel } from '../components/enumLabels';
@@ -49,8 +50,9 @@ export const QuestionAiAssistantPage = () => {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
-      <div className="mx-auto max-w-7xl">
+    <AppShell>
+      <main className="px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-7xl">
         <header className="mb-6">
           <p className="text-sm font-bold uppercase tracking-widest text-indigo-700">Admin · Question Bank</p>
           <h1 className="mt-1 text-3xl font-extrabold text-slate-950">Trợ lý AI tạo bản nháp (AI Assistant)</h1>
@@ -305,5 +307,6 @@ export const QuestionAiAssistantPage = () => {
         )}
       </div>
     </main>
-  );
+  </AppShell>
+);
 };

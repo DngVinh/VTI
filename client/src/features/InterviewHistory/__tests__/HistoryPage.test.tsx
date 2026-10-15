@@ -566,4 +566,22 @@ describe('HistoryPage', () => {
       screen.getByTestId('location'),
     ).toHaveTextContent('/history');
   });
+
+  it('renders English header and quick stats when I18nContext is English', async () => {
+    const { I18nProvider } = await import('../../../locales/I18nContext');
+
+    render(
+      <MemoryRouter initialEntries={['/history']}>
+        <I18nProvider defaultLocale="en">
+          <HistoryPage />
+        </I18nProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('New Practice Session')).toBeInTheDocument();
+    expect(screen.getByText('Total Sessions')).toBeInTheDocument();
+    expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeInTheDocument();
+  });
 });

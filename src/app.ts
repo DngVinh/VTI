@@ -43,7 +43,7 @@ export const createApp = (env: AppEnv = getEnv(), output: Logger = logger) => {
           frameSrc: ["'self'", "https://accounts.google.com/gsi/"],
           connectSrc: ["'self'", "https://accounts.google.com/gsi/"],
           styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com/gsi/style"],
-          imgSrc: ["'self'", "data:", "https://*.googleusercontent.com", "https://lh3.googleusercontent.com"],
+          imgSrc: ["'self'", "data:", "blob:", "https://*.googleusercontent.com", "https://lh3.googleusercontent.com"],
         },
       },
     })
@@ -93,6 +93,10 @@ export const createApp = (env: AppEnv = getEnv(), output: Logger = logger) => {
   app.use("/api", (req, res, next) => {
     next(new AppError(`Không tìm thấy API route: ${req.originalUrl}`, 404, "NOT_FOUND"));
   });
+
+  // Uploads directory for user avatars and uploaded assets
+  const uploadsPath = path.join(process.cwd(), "uploads");
+  app.use("/uploads", express.static(uploadsPath));
 
   // React Client static files & SPA fallback
   const clientPath = path.join(process.cwd(), "client", "dist");

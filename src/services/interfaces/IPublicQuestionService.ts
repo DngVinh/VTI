@@ -73,7 +73,14 @@ export interface PublicQuestionFilterQuery {
   type?: QuestionType;
 }
 
+export interface PublicTaxonomyDto {
+  roles: PublicTaxonomyItem[];
+  levels: PublicTaxonomyItem[];
+  technologies: PublicTechnologyItem[];
+}
+
 export interface IPublicQuestionService {
   listPublicQuestions(query: PublicQuestionFilterQuery): Promise<PaginatedPublicQuestionsDto>;
   getPublicQuestionDetail(id: string): Promise<PublicQuestionDetailDto | null>;
+  getPublicTaxonomy(roleId?: string): Promise<PublicTaxonomyDto>;
 }

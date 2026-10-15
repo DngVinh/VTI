@@ -7,6 +7,18 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {
@@ -16,6 +28,15 @@ export default defineConfig({
           }
           if (id.includes('node_modules/recharts/') || id.includes('node_modules/d3')) {
             return 'recharts-vendor';
+          }
+          if (id.includes('node_modules/@codemirror/') || id.includes('node_modules/@lezer/')) {
+            return 'codemirror-vendor';
+          }
+          if (id.includes('node_modules/i18next') || id.includes('node_modules/react-i18next')) {
+            return 'i18n-vendor';
+          }
+          if (id.includes('node_modules/lucide-react')) {
+            return 'icons-vendor';
           }
         },
       },

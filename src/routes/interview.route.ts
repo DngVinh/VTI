@@ -5,6 +5,8 @@ import {
   requireOwnership
 } from '../middlewares/auth.middleware';
 import { InterviewController } from '../controllers/InterviewController';
+import { CodeExecutionController } from '../controllers/CodeExecutionController';
+import { WhiteboardController } from '../controllers/WhiteboardController';
 import { container } from '../config/di';
 import { uploadMiddleware } from '../middlewares/upload.middleware';
 import { validate } from '../middlewares/validate.middleware';
@@ -15,8 +17,13 @@ import {
   interviewGetSchema,
   interviewHistoryQuerySchema,
   interviewJdCreateSchema,
+  interviewPracticeQuestionsSchema,
   interviewProgressSchema,
-  interviewSubmitSchema
+  interviewSubmitSchema,
+  followUpSchema,
+  conversationHistorySchema,
+  codeExecutionSchema,
+  whiteboardSchema,
 } from '../validators/interview.validator';
 import { InterviewSessionModel } from '../models/InterviewSession';
 import { RateLimitMiddleware } from '../middlewares/rate-limit.middleware';
@@ -27,6 +34,10 @@ const router = Router();
 
 const interviewController =
   container.resolve(InterviewController);
+const codeExecutionController =
+  container.resolve(CodeExecutionController);
+const whiteboardController =
+  container.resolve(WhiteboardController);
 
 const env = getEnv();
 
@@ -110,6 +121,17 @@ const interviewQuotaMiddleware =
     .resolve(InterviewQuotaMiddleware)
     .create();
 
+const sandboxRateLimit =
+  rateLimitMiddleware.create({
+    keyPrefix: 'interview:sandbox',
+    limit: 10,
+    windowMs: 60 * 1000,
+    keyGenerator: (req) =>
+      req.user
+        ? req.user._id.toString()
+        : req.ip || 'unknown'
+  });
+
 router.post(
   '/',
   validate(interviewCreateSchema),
@@ -127,6 +149,15 @@ router.post(
   validate(interviewJdCreateSchema),
   createInterviewRateLimit,
   interviewController.createSessionFromJD
+);
+
+router.post(
+  '/practice-questions',
+  authenticate,
+  authorize('CANDIDATE', 'INTERVIEWER'),
+  validate(interviewPracticeQuestionsSchema),
+  createInterviewRateLimit,
+  interviewController.createSessionFromQuestions
 );
 
 // ANA-01: Current-user interview analytics
@@ -194,6 +225,45 @@ router.post(
   validate(interviewSubmitSchema),
   submitRateLimit,
   interviewController.submitAnswers
+);
+
+router.post(
+  '/:id/follow-up',
+  authenticate,
+  authorize('CANDIDATE', 'INTERVIEWER'),
+  requireInterviewOwner,
+  validate(followUpSchema),
+  aiRateLimit,
+  interviewController.requestFollowUp
+);
+
+router.get(
+  '/:id/conversation',
+  authenticate,
+  authorize('CANDIDATE', 'INTERVIEWER'),
+  requireInterviewOwner,
+  validate(conversationHistorySchema),
+  interviewController.getConversationHistory
+);
+
+router.post(
+  '/:id/execute-code',
+  authenticate,
+  authorize('CANDIDATE', 'INTERVIEWER'),
+  requireInterviewOwner,
+  validate(codeExecutionSchema),
+  sandboxRateLimit,
+  codeExecutionController.executeCode
+);
+
+router.post(
+  '/:id/whiteboard',
+  authenticate,
+  authorize('CANDIDATE', 'INTERVIEWER'),
+  requireInterviewOwner,
+  validate(whiteboardSchema),
+  aiRateLimit,
+  whiteboardController.analyzeSnapshot
 );
 
 export default router;

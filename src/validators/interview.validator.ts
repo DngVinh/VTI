@@ -76,12 +76,26 @@ const submitAnswerSchema = z.discriminatedUnion('state', [
 const submitBodySchema = z.object({
   expectedVersion: z.number().int().nonnegative(),
   answers: z.array(submitAnswerSchema)
-    .length(5, 'Phải nộp snapshot đúng 5 câu hỏi')
+    .min(1, 'Cần nộp snapshot ít nhất 1 câu hỏi')
+    .max(5, 'Chỉ chấp nhận tối đa 5 câu hỏi')
     .refine(
       (answers) => new Set(answers.map((answer) => answer.questionId)).size === answers.length,
       'Mỗi câu hỏi chỉ được xuất hiện một lần'
     ),
 }).strict();
+
+export const interviewPracticeQuestionsSchema = z.object({
+  body: z.object({
+    questionIds: z.array(objectIdSchema)
+      .min(1, 'Cần chọn ít nhất 1 câu hỏi')
+      .max(5, 'Chỉ được chọn tối đa 5 câu hỏi')
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        'Không được chọn câu hỏi trùng lặp'
+      ),
+  }).strict(),
+  query: emptyQuerySchema,
+});
 
 export const interviewCreateSchema = z.object({ body: setupBodySchema, query: emptyQuerySchema });
 export const interviewJdCreateSchema = z.object({ body: jdSetupBodySchema, query: emptyQuerySchema });
@@ -108,6 +122,32 @@ export const interviewAnswersSchema = z.object({
   body: answersBodySchema,
   params: idParamsSchema,
   query: emptyQuerySchema,
+});
+
+export const followUpBodySchema = z
+  .object({
+    questionId: objectIdSchema,
+    candidateAnswer: z
+      .string()
+      .trim()
+      .min(1, 'Câu trả lời không được để trống')
+      .max(5000, 'Câu trả lời không được vượt quá 5000 ký tự'),
+  })
+  .strict();
+
+export const followUpSchema = z.object({
+  body: followUpBodySchema,
+  params: idParamsSchema,
+  query: emptyQuerySchema,
+});
+
+export const conversationHistorySchema = z.object({
+  params: idParamsSchema,
+  query: z
+    .object({
+      questionId: objectIdSchema.optional(),
+    })
+    .strict(),
 });
 
 const optionalTrimmedString = z.string().trim().min(1).optional();
@@ -198,3 +238,37 @@ export const interviewAnalyticsQuerySchema = z
       });
     }
   });
+
+export const codeExecutionSchema = z.object({
+  params: idParamsSchema,
+  body: z
+    .object({
+      questionId: z.string().trim().min(1, 'questionId không được để trống'),
+      code: z.string().max(65536, 'Mã nguồn không được vượt quá 64KB'),
+      language: z.enum([
+        'javascript',
+        'typescript',
+        'python',
+        'java',
+        'csharp',
+        'go',
+        'cpp',
+        'rust',
+      ]),
+      stdin: z.string().max(10000).optional(),
+      withAiReview: z.boolean().optional(),
+    })
+    .strict(),
+});
+
+export const whiteboardSchema = z.object({
+  params: idParamsSchema,
+  body: z
+    .object({
+      questionId: z.string().trim().min(1, 'questionId không được để trống'),
+      imageBase64: z.string().min(10, 'Dữ liệu ảnh không được để trống'),
+      mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp']).optional().default('image/png'),
+      canvasData: z.record(z.string(), z.any()).optional(),
+    })
+    .strict(),
+});

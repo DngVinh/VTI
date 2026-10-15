@@ -425,8 +425,8 @@ const envSchema = z
       .optional()
       .default('3000')
       .transform((val) => parseInt(val, 10))
-      .refine((val) => !isNaN(val) && val >= 500 && val <= 30000, {
-        message: 'INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS must be between 500 and 30000',
+      .refine((val) => !isNaN(val) && val >= 10 && val <= 30000, {
+        message: 'INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS must be between 10 and 30000',
       }),
     INTERVIEW_QUESTION_BANK_ALLOW_FALLBACK_TO_AI: booleanFlag('true'),
     INTERVIEW_QUESTION_BANK_ROLLOUT_PERCENT: z
@@ -447,6 +447,29 @@ const envSchema = z
       .refine((val) => !isNaN(val) && val >= 7 && val <= 365, {
         message: 'QUESTION_SOURCING_EVENT_RETENTION_DAYS must be between 7 and 365 days',
       }),
+
+    // AI Interview Upgrade (AIU) Configuration
+    AIU_FOLLOW_UP_ENABLED: booleanFlag('true'),
+    AIU_MAX_FOLLOW_UPS_PER_QUESTION: z
+      .string()
+      .optional()
+      .default('3')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 1 && val <= 5, {
+        message: 'AIU_MAX_FOLLOW_UPS_PER_QUESTION must be between 1 and 5',
+      }),
+    AIU_FOLLOW_UP_TIMEOUT_MS: z
+      .string()
+      .optional()
+      .default('15000')
+      .transform((val) => parseInt(val, 10))
+      .refine((val) => !isNaN(val) && val >= 1000 && val <= 60000, {
+        message: 'AIU_FOLLOW_UP_TIMEOUT_MS must be between 1000 and 60000',
+      }),
+    AIU_MULTI_AGENT_EVALUATION_ENABLED: booleanFlag('false'),
+    AIU_SANDBOX_ENABLED: booleanFlag('false'),
+    AIU_VISION_ANALYSIS_ENABLED: booleanFlag('false'),
+    AIU_GEMINI_LIVE_ENABLED: booleanFlag('false'),
   })
   .superRefine((data, ctx) => {
     if (data.RETENTION_MUTATION_ENABLED && !data.RETENTION_APPROVAL_ID) {
@@ -698,6 +721,15 @@ export interface AppEnv {
   INTERVIEW_QUESTION_BANK_ROLLOUT_SALT: string;
   QUESTION_SOURCING_TELEMETRY_ENABLED: boolean;
   QUESTION_SOURCING_EVENT_RETENTION_DAYS: number;
+
+  // AI Interview Upgrade (AIU) Configuration
+  AIU_FOLLOW_UP_ENABLED: boolean;
+  AIU_MAX_FOLLOW_UPS_PER_QUESTION: number;
+  AIU_FOLLOW_UP_TIMEOUT_MS: number;
+  AIU_MULTI_AGENT_EVALUATION_ENABLED: boolean;
+  AIU_SANDBOX_ENABLED: boolean;
+  AIU_VISION_ANALYSIS_ENABLED: boolean;
+  AIU_GEMINI_LIVE_ENABLED: boolean;
 }
 
 let dotenvLoaded = false;

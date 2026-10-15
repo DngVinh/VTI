@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -13,7 +13,10 @@ const apiMocks = vi.hoisted(() => ({
   listQuestions: vi.fn(),
   getQuestion: vi.fn(),
   createQuestion: vi.fn(),
-  createVersion: vi.fn(),
+    createVersion: vi.fn(),
+    createQuestionSummaryEtag: vi.fn(),
+    publishVersion: vi.fn(),
+    transitionLifecycle: vi.fn(),
   updateQuestionOwner: vi.fn(),
   updateDraft: vi.fn(),
   listVersions: vi.fn(),
@@ -23,6 +26,7 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('../api/questionBankApi', () => ({
   questionBankApi: apiMocks,
   createIdempotencyKey: () => 'qb-page-test-idempotency-key',
+  createQuestionSummaryEtag: apiMocks.createQuestionSummaryEtag,
   createVersionEtag: (version: { id: string; revision: number }) =>
     'W/"question-version:' + version.id + ':' + version.revision + '"',
 }));
@@ -121,6 +125,9 @@ describe('Question Bank pages', () => {
 
   beforeEach(() => {
     Object.values(apiMocks).forEach((mock) => mock.mockReset());
+    apiMocks.createQuestionSummaryEtag.mockImplementation(
+      (question: { id: string; revision: number }) => `W/"question:${question.id}:${question.revision}"`
+    );
     apiMocks.listVersions.mockResolvedValue([]);
     apiMocks.getVersion.mockResolvedValue(version());
   });
@@ -140,9 +147,11 @@ describe('Question Bank pages', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Đang tải danh sách câu hỏi…')).toBeInTheDocument();
+    expect(screen.getByText('Đang tải câu hỏi…')).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: 'QB-2026-000001' })).toBeInTheDocument();
     expect(screen.getByText(/Trang 1\/2/)).toBeInTheDocument();
+    expect(screen.queryByText('Hàng đợi duyệt')).not.toBeInTheDocument();
+    expect(screen.queryByText('Import / Export')).not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText('Độ khó'), 'MEDIUM');
     await waitFor(() =>
@@ -150,6 +159,51 @@ describe('Question Bank pages', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
     await waitFor(() => expect(screen.getByLabelText('location')).toHaveTextContent('page=2'));
+  });
+
+  it('hides a question from the library and can restore it', async () => {
+    const retiredSummary = { ...summary, lifecycleStatus: 'RETIRED', revision: 1 };
+    apiMocks.listQuestions
+      .mockResolvedValueOnce({
+        items: [summary],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      })
+      .mockResolvedValue({
+        items: [retiredSummary],
+        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      });
+    apiMocks.transitionLifecycle.mockResolvedValue({ data: detail(null), etag: 'W/"question:' + QUESTION_ID + ':1"' });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/admin/question-bank']}>
+        <Routes>
+          <Route path="/admin/question-bank" element={<QuestionBankListPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const hideButton = await screen.findByRole('button', { name: 'Ẩn QB-2026-000001' });
+    expect(hideButton).not.toBeDisabled();
+    await user.click(hideButton);
+    expect(confirm).toHaveBeenCalled();
+    expect(apiMocks.createQuestionSummaryEtag).toHaveBeenCalledWith(summary);
+    await waitFor(() => expect(apiMocks.transitionLifecycle).toHaveBeenCalledWith(
+      QUESTION_ID,
+      'retire',
+      'Admin ẩn QB-2026-000001 khỏi thư viện',
+      'W/"question:' + QUESTION_ID + ':0"',
+      'qb-page-test-idempotency-key'
+    ));
+    await user.click(await screen.findByRole('button', { name: 'Khôi phục QB-2026-000001' }));
+    await waitFor(() => expect(apiMocks.transitionLifecycle).toHaveBeenCalledWith(
+      QUESTION_ID,
+      'restore',
+      'Admin khôi phục QB-2026-000001 vào thư viện',
+      'W/"question:' + QUESTION_ID + ':1"',
+      'qb-page-test-idempotency-key'
+    ));
+    confirm.mockRestore();
   });
 
   it('shows distinct empty, filtered-empty, and retry states', async () => {
@@ -173,7 +227,7 @@ describe('Question Bank pages', () => {
     expect(await screen.findByText('Không tìm thấy kết quả')).toBeInTheDocument();
   });
 
-  it('validates and creates a partial Draft, retaining the idempotency key', async () => {
+  it('validates and creates a library question, retaining the idempotency key', async () => {
     const createdVersion = version({
       content: {
         ...emptyQuestionVersionInput().content,
@@ -185,6 +239,10 @@ describe('Question Bank pages', () => {
       data: createdDetail,
       etag: 'W/"question-version:' + VERSION_ID + ':0"',
     });
+    apiMocks.publishVersion.mockResolvedValue({
+      data: version({ ...createdVersion, status: 'PUBLISHED', revision: 1 }),
+      etag: 'W/"question-version:' + VERSION_ID + ':1"',
+    });
     apiMocks.getQuestion.mockResolvedValue({
       data: createdDetail,
       etag: 'W/"question-version:' + VERSION_ID + ':0"',
@@ -192,11 +250,16 @@ describe('Question Bank pages', () => {
     const user = userEvent.setup();
     renderEditor('/admin/question-bank/questions/new');
 
-    await user.click(screen.getByRole('button', { name: 'Lưu ngay' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('ít nhất một trường nội dung');
+    await user.click(screen.getByRole('button', { name: 'Thêm vào thư viện' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Cần nhập câu hỏi');
 
-    await user.type(screen.getByLabelText('Prompt tiếng Việt'), 'Prompt mới');
-    await user.click(screen.getByRole('button', { name: 'Lưu ngay' }));
+    await user.type(screen.getByLabelText('Câu hỏi (VI)'), 'Prompt mới');
+    await user.type(screen.getByLabelText('Giải thích (VI)'), 'Giải thích cơ chế và các ý chính cần nắm.');
+    await user.selectOptions(screen.getByLabelText('Loại câu hỏi'), 'TECHNICAL');
+    await user.selectOptions(screen.getByLabelText('Độ khó'), 'MEDIUM');
+    await user.type(screen.getByLabelText('Đáp án (VI)'), 'Đáp án mẫu');
+    await user.type(screen.getByLabelText('Mục tiêu đánh giá (VI)'), 'Đánh giá khả năng hiểu và giải thích đúng bản chất.');
+    await user.click(screen.getByRole('button', { name: 'Thêm vào thư viện' }));
     await waitFor(() => expect(apiMocks.createQuestion).toHaveBeenCalledWith(
       expect.objectContaining({
         content: expect.objectContaining({
@@ -205,62 +268,35 @@ describe('Question Bank pages', () => {
       }),
       'qb-page-test-idempotency-key'
     ));
+    await waitFor(() => expect(apiMocks.publishVersion).toHaveBeenCalledWith(
+      QUESTION_ID,
+      1,
+      'W/"question-version:' + VERSION_ID + ':0"',
+      'qb-page-test-idempotency-key',
+      'Admin tạo câu hỏi và đưa vào thư viện',
+      true
+    ));
     await waitFor(() => expect(screen.getByLabelText('location')).toHaveTextContent(
       '/admin/question-bank/questions/' + QUESTION_ID + '/edit'
     ));
   });
 
-  it('authors every editor section without persisting restricted data locally', async () => {
-    const user = userEvent.setup();
+  it('shows only the focused authoring fields', () => {
     renderEditor('/admin/question-bank/questions/new');
 
-    const change = (label: string, value: string) =>
-      fireEvent.change(screen.getByLabelText(label), { target: { value } });
-    change('Prompt tiếng Việt', 'Prompt đầy đủ');
-    change('Prompt English', 'Complete prompt');
-    change('Giải thích tiếng Việt (tùy chọn)', 'Giải thích');
-    change('Explanation English (optional)', 'Explanation');
-    change('Primary role ID', ACTOR_ID);
-    change('Additional role IDs (phân cách bằng dấu phẩy)', VERSION_ID);
-    change('Level IDs (phân cách bằng dấu phẩy)', QUESTION_ID);
-    change(
-      'Technologies: ObjectId:relevance (phân cách bằng dấu phẩy)',
-      VERSION_ID + ':75'
-    );
-    change('Topic', 'Runtime');
-    change('Tags kebab-case (phân cách bằng dấu phẩy)', 'node-js, event-loop');
-    await user.selectOptions(screen.getByLabelText('Độ khó'), 'HARD');
-    await user.selectOptions(screen.getByLabelText('Loại câu hỏi'), 'SYSTEM_DESIGN');
-    await user.click(screen.getByLabelText('Technology-agnostic'));
-    await user.click(screen.getByLabelText('Đánh dấu classification hoàn tất'));
-
-    change('Reference answer VI', 'Đáp án hạn chế');
-    change('Reference answer EN', 'Restricted answer');
-    change('Learning objective VI', 'Mục tiêu');
-    change('Learning objective EN', 'Objective');
-    change('Thời gian dự kiến (giây)', '180');
-    await user.click(screen.getByRole('button', { name: 'Thêm follow-up' }));
-    change('Follow-up 1 VI', 'Câu hỏi phụ');
-    change('Follow-up 1 EN', 'Follow up');
-    await user.click(screen.getByRole('button', { name: 'Xóa' }));
-
-    await user.click(screen.getByRole('button', { name: 'Tạo rubric' }));
-    fireEvent.change(screen.getAllByLabelText('Key')[0], {
-      target: { value: 'correctness' },
-    });
-    fireEvent.change(screen.getAllByLabelText('Tiêu đề VI')[0], {
-      target: { value: 'Đúng' },
-    });
-    fireEvent.change(screen.getAllByLabelText('Title EN')[0], {
-      target: { value: 'Correct' },
-    });
-    change('Change summary (tối đa 1.000 ký tự)', 'Hoàn thiện bản nháp');
-    await user.click(screen.getByRole('button', { name: 'Đưa tiêu chí 1 xuống' }));
-
-    const preview = screen.getByRole('heading', { name: 'Preview cho Candidate' })
-      .closest('section') as HTMLElement;
-    expect(within(preview).getByText('Prompt đầy đủ')).toBeInTheDocument();
-    expect(within(preview).queryByText('Đáp án hạn chế')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Câu hỏi (VI)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Câu hỏi (EN) — tùy chọn')).toBeInTheDocument();
+    expect(screen.getByLabelText('Giải thích (VI)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Giải thích (EN) — tùy chọn')).toBeInTheDocument();
+    expect(screen.getByLabelText('Đáp án (VI)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Mục tiêu đánh giá (VI)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Loại câu hỏi')).toBeInTheDocument();
+    expect(screen.getByLabelText('Độ khó')).toBeInTheDocument();
+    expect(screen.getByLabelText('Topic — tùy chọn')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tags — phân cách bằng dấu phẩy')).toBeInTheDocument();
+    expect(screen.getByText('Rubric')).toBeInTheDocument();
+    expect(screen.queryByText('Preview cho Candidate')).not.toBeInTheDocument();
+    expect(screen.queryByText('AI Translate')).not.toBeInTheDocument();
   });
 
   it('loads and explicitly saves an existing Draft with its ETag', async () => {
@@ -277,18 +313,19 @@ describe('Question Bank pages', () => {
     apiMocks.updateDraft.mockResolvedValue({
       data: version({
         ...existing,
+
         revision: 1,
         content: { ...existing.content, prompt: { vi: 'Prompt đã sửa', en: '' } },
       }),
       etag: 'W/"question-version:' + VERSION_ID + ':1"',
+
     });
     const user = userEvent.setup();
     renderEditor('/admin/question-bank/questions/' + QUESTION_ID + '/edit');
 
-    const prompt = await screen.findByLabelText('Prompt tiếng Việt');
-    await user.clear(prompt);
-    await user.type(prompt, 'Prompt đã sửa');
-    await user.click(screen.getByRole('button', { name: 'Lưu ngay' }));
+    const prompt = await screen.findByLabelText('Câu hỏi (VI)');
+    fireEvent.change(prompt, { target: { value: 'Prompt đã sửa' } });
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
     await waitFor(() => expect(apiMocks.updateDraft).toHaveBeenCalledWith(
       QUESTION_ID,
@@ -324,13 +361,12 @@ describe('Question Bank pages', () => {
     const user = userEvent.setup();
     renderEditor('/admin/question-bank/questions/' + QUESTION_ID + '/edit');
 
-    const prompt = await screen.findByLabelText('Prompt tiếng Việt');
-    await user.clear(prompt);
-    await user.type(prompt, 'Bản local cần giữ');
-    await user.click(screen.getByRole('button', { name: 'Lưu ngay' }));
+    const prompt = await screen.findByLabelText('Câu hỏi (VI)');
+    fireEvent.change(prompt, { target: { value: 'Bản local cần giữ' } });
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
     expect(await screen.findByText(/Xung đột chỉnh sửa/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Prompt tiếng Việt')).toHaveValue('Bản local cần giữ');
+    expect(screen.getByLabelText('Câu hỏi (VI)')).toHaveValue('Bản local cần giữ');
     expect(screen.getByText((_, element) =>
       element?.tagName === 'P' &&
       element.textContent?.includes('Server prompt VI: Bản server') === true
@@ -361,7 +397,7 @@ describe('Question Bank pages', () => {
     renderEditor('/admin/question-bank/questions/' + QUESTION_ID);
 
     await user.click(await screen.findByRole('button', {
-      name: 'Tạo Draft từ bản Published',
+      name: 'Tạo bản nháp chỉnh sửa',
     }));
     await waitFor(() => expect(apiMocks.createVersion).toHaveBeenCalledWith(
       QUESTION_ID,

@@ -1,6 +1,7 @@
 import { AppError } from '../../utils/AppError';
+import { logger } from '../../infrastructure/logging/logger';
 
-export const RETRY_LIMITS = Object.freeze({ attempts: 3, totalMs: 90000, attemptMs: 30000, baseMs: 250 });
+export const RETRY_LIMITS = Object.freeze({ attempts: 3, totalMs: 90000, attemptMs: 30000, baseMs: 1000 });
 const unavailable = () => new AppError('AI provider unavailable', 503, 'AI_PROVIDER_UNAVAILABLE');
 export async function providerRetry<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const deadline = Date.now() + RETRY_LIMITS.totalMs;
@@ -15,7 +16,7 @@ export async function providerRetry<T>(operation: (signal: AbortSignal) => Promi
         timer = setTimeout(() => { timedOut = true; controller.abort(); reject(unavailable()); }, Math.min(remaining, RETRY_LIMITS.attemptMs));
       })]);
     } catch (error) {
-      console.error('Provider error attempt', attempt, error);
+      logger.warn('ai.provider_failed', { attempt });
       const status = (error as {status?: number})?.status;
       const transient = timedOut || status === 429 || [500, 502, 503, 504].includes(status ?? 0);
       if (!transient || attempt + 1 === RETRY_LIMITS.attempts) throw unavailable();

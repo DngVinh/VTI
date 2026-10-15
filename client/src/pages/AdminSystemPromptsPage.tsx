@@ -5,8 +5,11 @@ import { SystemPromptFilter } from '../features/AdminSystemPrompt/components/Sys
 import { SystemPromptList } from '../features/AdminSystemPrompt/components/SystemPromptList';
 import { SystemPromptFormModal } from '../features/AdminSystemPrompt/components/SystemPromptFormModal';
 import type { SystemPrompt, CreateSystemPromptDto, PromptType, PromptLanguage, PromptStatus } from '../features/AdminSystemPrompt/types';
+import { AppShell } from '../layouts/AppShell';
+import { useTranslation } from '../locales/I18nContext';
 
 const AdminSystemPromptsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { prompts, loading, error: fetchError, fetchPrompts } = useSystemPrompts();
   const { createDraft, publishPrompt, rollbackPrompt, isMutating, error: mutationError } = usePromptMutations();
 
@@ -78,44 +81,56 @@ const AdminSystemPromptsPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">System Prompts Management</h1>
-          <p className="text-gray-500 mt-1 text-sm">Manage, version, and deploy AI instruction templates.</p>
+    <AppShell>
+      <div className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-600" />
+              AI Prompt Engineering
+            </div>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl">
+              {t('admin.promptsTitle', 'System Prompts Management')}
+            </h1>
+            <p className="text-slate-500 mt-1 text-sm">
+              {t('admin.promptsSubtitle', 'Quản lý, tạo phiên bản và triển khai mẫu chỉ thị AI cho toàn hệ thống.')}
+            </p>
+          </div>
+          <button
+            onClick={handleOpenCreateModal}
+            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-xs"
+          >
+            <span>{t('admin.createPrompt', '+ Tạo bản nháp Prompt mới')}</span>
+          </button>
         </div>
-        <button
-          onClick={handleOpenCreateModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm"
-        >
-          + New Prompt Draft
-        </button>
+
+        {(fetchError || mutationError) && (
+          <div className="bg-red-50 border border-red-200 p-4 mb-6 rounded-2xl">
+            <p className="text-red-700 font-medium text-sm">Error: {fetchError || mutationError}</p>
+          </div>
+        )}
+
+        <div className="space-y-6">
+          <SystemPromptFilter filters={filters} onFilterChange={handleFilterChange} />
+
+          <SystemPromptList
+            prompts={prompts}
+            loading={loading}
+            onViewPrompt={handleViewPrompt}
+            onPublishPrompt={handlePublish}
+            onRollbackPrompt={handleRollback}
+          />
+        </div>
+
+        <SystemPromptFormModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSubmit={handleModalSubmit}
+          initialData={editingPrompt}
+          isSubmitting={isMutating}
+        />
       </div>
-
-      {(fetchError || mutationError) && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-md">
-          <p className="text-red-700 font-medium">Error: {fetchError || mutationError}</p>
-        </div>
-      )}
-
-      <SystemPromptFilter filters={filters} onFilterChange={handleFilterChange} />
-
-      <SystemPromptList
-        prompts={prompts}
-        loading={loading}
-        onViewPrompt={handleViewPrompt}
-        onPublishPrompt={handlePublish}
-        onRollbackPrompt={handleRollback}
-      />
-
-      <SystemPromptFormModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleModalSubmit}
-        initialData={editingPrompt}
-        isSubmitting={isMutating}
-      />
-    </div>
+    </AppShell>
   );
 };
 

@@ -97,6 +97,7 @@ describe('Public Question Study API (TDD RED-GREEN-REFACTOR)', () => {
       name: 'Node.js',
       status: 'ACTIVE',
       description: 'Node.js runtime',
+      roles: [role._id],
     });
     technologyId = tech._id.toString();
 
@@ -360,6 +361,44 @@ describe('Public Question Study API (TDD RED-GREEN-REFACTOR)', () => {
     it('allows guest access without Authorization header', async () => {
       const res = await request(app).get(`${PUBLIC_BASE}/${publishedQuestionId}`);
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe('GET /api/v1/questions/public/taxonomy', () => {
+    it('returns public taxonomy options (roles, levels, technologies) without auth', async () => {
+      const res = await request(app).get(`${PUBLIC_BASE}/taxonomy`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data.roles)).toBe(true);
+      expect(res.body.data.roles).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'Backend Developer' })])
+      );
+      expect(Array.isArray(res.body.data.levels)).toBe(true);
+      expect(res.body.data.levels).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'Middle' })])
+      );
+      expect(Array.isArray(res.body.data.technologies)).toBe(true);
+      expect(res.body.data.technologies).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'Node.js' })])
+      );
+    });
+
+    it('filters technologies by roleId when provided', async () => {
+      const res = await request(app)
+        .get(`${PUBLIC_BASE}/taxonomy`)
+        .query({ roleId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.technologies.length).toBe(1);
+      expect(res.body.data.technologies[0].name).toBe('Node.js');
+
+      const nonMatch = await request(app)
+        .get(`${PUBLIC_BASE}/taxonomy`)
+        .query({ roleId: otherRoleId });
+
+      expect(nonMatch.status).toBe(200);
+      expect(nonMatch.body.data.technologies.length).toBe(0);
     });
   });
 });

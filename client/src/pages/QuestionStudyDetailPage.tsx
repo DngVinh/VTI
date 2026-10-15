@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { publicQuestionApi } from '../services/api/publicQuestionApi';
+import { interviewApi } from '../services/api/interviewApi';
+import { useAuthStore } from '../auth/authStore';
 import type { PublicQuestionDetail } from '../features/QuestionLibrary/types';
+import { AppShell } from '../layouts/AppShell';
 
 export const QuestionStudyDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -11,6 +14,8 @@ export const QuestionStudyDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [langMode, setLangMode] = useState<'VI' | 'EN' | 'BOTH'>('VI');
+  const [isStartingPractice, setIsStartingPractice] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -78,7 +83,7 @@ export const QuestionStudyDetailPage: React.FC = () => {
             className="my-3 rounded-xl bg-slate-900 text-slate-100 p-4 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner"
           >
             {lang && (
-              <div className="text-[10px] text-slate-400 font-bold uppercase mb-1.5 tracking-wider">
+              <div className="text-[10px] text-slate-300 font-bold uppercase mb-1.5 tracking-wider">
                 {lang}
               </div>
             )}
@@ -140,6 +145,25 @@ export const QuestionStudyDetailPage: React.FC = () => {
     );
   };
 
+  const handleStartPractice = async () => {
+    if (!question) return;
+    if (!useAuthStore.getState().user) {
+      navigate('/login', { state: { from: `/questions/${question.id}` } });
+      return;
+    }
+    setIsStartingPractice(true);
+    setActionError(null);
+    try {
+      const session = await interviewApi.createSessionFromQuestions([question.id]);
+      const sessionId = (session as any)._id || (session as any).id;
+      navigate(`/interview/${sessionId}`);
+    } catch (err: any) {
+      console.error('Lỗi khi bắt đầu phỏng vấn từ câu hỏi:', err);
+      setActionError(err.message || 'Không thể tạo phiên phỏng vấn. Vui lòng thử lại.');
+      setIsStartingPractice(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -176,10 +200,11 @@ export const QuestionStudyDetailPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
-      {/* Top Header & Breadcrumb */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <AppShell>
+      <div className="pb-20">
+        {/* Top Header & Breadcrumb */}
+        <div className="bg-white border-b border-slate-200 shadow-xs mb-6">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3 text-sm">
             <Link
               to="/questions"
@@ -228,7 +253,7 @@ export const QuestionStudyDetailPage: React.FC = () => {
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
         {/* Question Header Card */}
@@ -354,7 +379,13 @@ export const QuestionStudyDetailPage: React.FC = () => {
                         Tiêu chí {idx + 1}:
                       </span>
                       <span className="text-base font-bold text-slate-900">
-                        {langMode === 'EN'
+                        {langMode === 'BOTH' ? (
+                          <>
+                            {criterion.title.vi && <span>{criterion.title.vi}</span>}
+                            {criterion.title.en && criterion.title.vi && <span className="mx-1.5 text-slate-300 font-normal">/</span>}
+                            {criterion.title.en && <span className="text-slate-600 font-medium italic">{criterion.title.en}</span>}
+                          </>
+                        ) : langMode === 'EN'
                           ? criterion.title.en || criterion.title.vi
                           : criterion.title.vi || criterion.title.en}
                       </span>
@@ -366,7 +397,12 @@ export const QuestionStudyDetailPage: React.FC = () => {
 
                   {criterion.description && (criterion.description.vi || criterion.description.en) && (
                     <div className="px-5 py-2.5 bg-slate-50/50 text-xs text-slate-600 border-b border-slate-100">
-                      {langMode === 'EN'
+                      {langMode === 'BOTH' ? (
+                        <div className="space-y-1">
+                          {criterion.description.vi && <p>{criterion.description.vi}</p>}
+                          {criterion.description.en && <p className="text-slate-500 italic">{criterion.description.en}</p>}
+                        </div>
+                      ) : langMode === 'EN'
                         ? criterion.description.en || criterion.description.vi
                         : criterion.description.vi || criterion.description.en}
                     </div>
@@ -402,11 +438,20 @@ export const QuestionStudyDetailPage: React.FC = () => {
                               <div className="text-xs font-bold uppercase tracking-wider mb-1.5">
                                 {tierTitles[lvl.score] || `Điểm ${lvl.score}`}
                               </div>
-                              <p className="text-xs leading-relaxed">
-                                {langMode === 'EN'
-                                  ? lvl.description.en || lvl.description.vi
-                                  : lvl.description.vi || lvl.description.en}
-                              </p>
+                              <div className="text-xs leading-relaxed">
+                                {langMode === 'BOTH' ? (
+                                  <div className="space-y-1">
+                                    {lvl.description.vi && <p>{lvl.description.vi}</p>}
+                                    {lvl.description.en && <p className="text-slate-500 italic">{lvl.description.en}</p>}
+                                  </div>
+                                ) : (
+                                  <p>
+                                    {langMode === 'EN'
+                                      ? lvl.description.en || lvl.description.vi
+                                      : lvl.description.vi || lvl.description.en}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
@@ -420,6 +465,24 @@ export const QuestionStudyDetailPage: React.FC = () => {
           )}
         </div>
 
+        {/* Action Error Alert */}
+        {actionError && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{actionError}</span>
+            </div>
+            <button
+              onClick={() => setActionError(null)}
+              className="text-xs font-semibold text-rose-700 hover:text-rose-900 cursor-pointer underline"
+            >
+              Đóng
+            </button>
+          </div>
+        )}
+
         {/* Section 3: Call To Action - Practice With AI */}
         <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-800 rounded-3xl p-8 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center sm:text-left">
@@ -432,17 +495,26 @@ export const QuestionStudyDetailPage: React.FC = () => {
           </div>
 
           <button
-            onClick={() => {
-              navigate(
-                `/setup?roleId=${question.primaryRoleId || ''}&techId=${question.technologies[0]?.id || ''}`
-              );
-            }}
-            className="px-8 py-4 rounded-2xl bg-white text-indigo-700 hover:bg-indigo-50 font-extrabold text-base shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all cursor-pointer whitespace-nowrap"
+            type="button"
+            disabled={isStartingPractice}
+            onClick={handleStartPractice}
+            className="px-8 py-4 rounded-2xl bg-white text-indigo-700 hover:bg-indigo-50 font-extrabold text-base shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 flex items-center gap-2"
           >
-            Luyện phỏng vấn câu này với AI →
+            {isStartingPractice ? (
+              <>
+                <svg className="animate-spin h-5 w-5 text-indigo-700" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Đang tạo phòng...</span>
+              </>
+            ) : (
+              <span>Luyện phỏng vấn câu này với AI →</span>
+            )}
           </button>
         </div>
       </main>
     </div>
-  );
+  </AppShell>
+);
 };

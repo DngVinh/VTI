@@ -67,6 +67,7 @@ export interface PublishVersionInput {
   actorId: string;
   reason: string | null;
   requestId: string;
+  allowDraft?: boolean;
 }
 
 export interface LifecycleTransitionInput {

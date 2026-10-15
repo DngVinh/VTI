@@ -238,6 +238,14 @@ questionVersionSchema.index(
   { normalizedPromptFingerprint: 1 },
   { name: 'question_versions_prompt_fingerprint', sparse: true }
 );
+questionVersionSchema.index(
+  { sourceReference: 1 },
+  {
+    unique: true,
+    name: 'question_versions_source_reference_unique',
+    partialFilterExpression: { sourceReference: { $type: 'string' } },
+  }
+);
 
 const QuestionVersion =
   (mongoose.models.QuestionVersion as mongoose.Model<IQuestionVersion> | undefined) ??

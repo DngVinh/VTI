@@ -1,11 +1,11 @@
 import {
   IInterviewState,
-  InterviewStatus
-} from '../IInterviewState';
-
-import {
-  InterviewContext
-} from '../InterviewContext';
+  InterviewStatus,
+  IInterviewContext,
+  GeneratePayload,
+  SubmitPayload,
+  SaveProgressPayload,
+} from '../types';
 
 import {
   InvalidStateTransitionException
@@ -15,11 +15,6 @@ import {
   EvaluatingState
 } from './EvaluatingState';
 
-import {
-  GeneratePayload,
-  SubmitPayload,
-  SaveProgressPayload
-} from '../types';
 import { evaluateSafely } from '../../../services/ai/prompt-security';
 import { logger } from '../../../infrastructure/logging/logger';
 
@@ -31,7 +26,7 @@ export class InProgressState
   }
 
   async generate(
-    _context: InterviewContext,
+    _context: IInterviewContext,
     _payload: GeneratePayload
   ): Promise<void> {
     throw new InvalidStateTransitionException(
@@ -40,7 +35,7 @@ export class InProgressState
   }
 
   async submit(
-    context: InterviewContext,
+    context: IInterviewContext,
     payload: SubmitPayload
   ): Promise<void> {
     logger.info('interview.submitting', { resourceType: 'interview', resourceId: context.getInterviewId() });
@@ -57,6 +52,68 @@ export class InProgressState
           ownerId: context.getRepository().getOwnerId(),
         });
 
+        return;
+      }
+
+      /*
+       * Multi-Agent Evaluation Panel (AIP-AIU-02).
+       */
+      if (payload.multiAgentEvaluator) {
+        const session = await context.getRepository().findById(context.getInterviewId());
+        if (!session || !session.questions) {
+          throw new Error('Cannot find questions for this session.');
+        }
+
+        const consensus = await payload.multiAgentEvaluator.evaluate({
+          sessionId: context.getInterviewId(),
+          role: session.role || 'Developer',
+          level: session.level || 'Junior',
+          technologies: session.technologies || [],
+          questions: session.questions.map((q: any, i: number) => ({
+            order: q.order || i + 1,
+            category: q.category || 'General',
+            difficulty: q.difficulty || 'Medium',
+            content: q.content,
+          })),
+          answers: payload.data.map((ans, i) => ({
+            questionId: ans.questionId,
+            order: i + 1,
+            candidateAnswer: ans.candidateAnswer,
+          })),
+          conversationHistory: payload.conversationTurns,
+        });
+
+        const evaluationResult = payload.multiAgentEvaluator.toEvaluationResult(consensus, {
+          sessionId: context.getInterviewId(),
+          role: session.role || 'Developer',
+          level: session.level || 'Junior',
+          technologies: session.technologies || [],
+          questions: session.questions,
+          answers: payload.data.map((ans, i) => ({
+            order: i + 1,
+            candidateAnswer: ans.candidateAnswer,
+          })),
+        });
+
+        for (const evalResult of evaluationResult.evaluations) {
+          await context.getRepository().updateQuestionFeedback(
+            evalResult.questionId,
+            evalResult.feedback,
+            evalResult.score,
+            context.getInterviewId()
+          );
+        }
+
+        await context.getRepository().update(context.getInterviewId(), {
+          overallScore: evaluationResult.overallScore,
+          dimensions: evaluationResult.dimensions,
+          learningPath: evaluationResult.learningPath,
+          personaEvaluations: consensus.personaBreakdown,
+          varianceFlags: consensus.varianceFlags,
+        });
+
+        const { CompletedState } = await import('./CompletedState');
+        await context.changeState(new CompletedState());
         return;
       }
 
@@ -146,22 +203,14 @@ export class InProgressState
       }
     } catch (error) {
       // Fail -> FAILED
-      const {
-        FailedState
-      } = await import(
-        './FailedState'
-      );
-
-      await context.changeState(
-        new FailedState()
-      );
+      await context.changeState('FAILED');
 
       throw error;
     }
   }
 
   async saveProgress(
-    context: InterviewContext,
+    context: IInterviewContext,
     payload: SaveProgressPayload
   ): Promise<void> {
     logger.info('interview.saving', { resourceType: 'interview', resourceId: context.getInterviewId() });

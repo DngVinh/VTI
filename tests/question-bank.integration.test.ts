@@ -72,6 +72,9 @@ const authoringPayload = () => ({
       weight: 60,
       levels: [
         { score: 0, description: { vi: 'Chưa đạt', en: 'Missing' } },
+        { score: 1, description: { vi: 'Cơ bản', en: 'Basic' } },
+        { score: 2, description: { vi: 'Đạt chuẩn', en: 'Meets expectations' } },
+        { score: 3, description: { vi: 'Tốt', en: 'Good' } },
         { score: 4, description: { vi: 'Đầy đủ', en: 'Complete' } },
       ],
     },
@@ -82,6 +85,9 @@ const authoringPayload = () => ({
       weight: 40,
       levels: [
         { score: 0, description: { vi: 'Khó hiểu', en: 'Unclear' } },
+        { score: 1, description: { vi: 'Cơ bản', en: 'Basic' } },
+        { score: 2, description: { vi: 'Đạt chuẩn', en: 'Meets expectations' } },
+        { score: 3, description: { vi: 'Tốt', en: 'Good' } },
         { score: 4, description: { vi: 'Rõ ràng', en: 'Clear' } },
       ],
     },
@@ -220,6 +226,71 @@ describe('AIP-62 Question Bank API integration', () => {
     expect(await QuestionVersion.countDocuments()).toBe(1);
     expect(await IdempotencyRecord.countDocuments({ status: 'COMPLETED' })).toBe(1);
     expect(await OutboxEvent.countDocuments({ eventType: 'QUESTION_CREATED' })).toBe(1);
+  });
+
+  it('lets Admin QB publish a quick-form question directly to the public library', async () => {
+    const created = await createQuestion('qb-direct-publish-0001');
+    const questionId = created.body.data.question.id as string;
+    const draft = created.body.data.draftVersion;
+
+    const published = await request(app)
+      .post(`${BASE}/${questionId}/versions/${draft.versionNumber}/publish`)
+      .set(auth())
+      .set('If-Match', created.headers.etag)
+      .set('Idempotency-Key', 'qb-direct-publish-version-0001')
+      .send({ direct: true });
+
+    expect(published.status).toBe(200);
+    expect(published.body.data.status).toBe('PUBLISHED');
+    expect(await Question.exists({
+      _id: questionId,
+      currentPublishedVersionId: draft.id,
+      draftVersionId: null,
+    })).not.toBeNull();
+
+    const publicLibrary = await request(app)
+      .get('/api/v1/questions/public')
+      .query({ search: 'event loop trong Node.js' });
+    expect(publicLibrary.status).toBe(200);
+    expect(publicLibrary.body.data.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: questionId })])
+    );
+
+    const publicDetail = await request(app).get(`/api/v1/questions/public/${questionId}`);
+    expect(publicDetail.status).toBe(200);
+    expect(publicDetail.body.data.explanation.vi).toBeTruthy();
+    expect(publicDetail.body.data.learningObjective.vi).toBeTruthy();
+    expect(publicDetail.body.data.rubric).toHaveLength(2);
+    expect(publicDetail.body.data.rubric[0].levels).toHaveLength(5);
+  });
+
+  it('allows direct publication without taxonomy when standard content is present', async () => {
+    const payload = authoringPayload();
+    payload.content.prompt.en = '';
+    Object.assign(payload.classification, {
+      primaryRoleId: null,
+      levelIds: [],
+      technologies: [],
+      technologyAgnostic: false,
+      classificationComplete: false,
+    });
+    const created = await request(app)
+      .post(BASE)
+      .set(auth())
+      .set('Idempotency-Key', 'qb-direct-publish-minimal-create-0001')
+      .send(payload);
+    expect(created.status).toBe(201);
+
+    const draft = created.body.data.draftVersion;
+    const published = await request(app)
+      .post(`${BASE}/${created.body.data.question.id}/versions/${draft.versionNumber}/publish`)
+      .set(auth())
+      .set('If-Match', created.headers.etag)
+      .set('Idempotency-Key', 'qb-direct-publish-minimal-version-0001')
+      .send({ direct: true });
+
+    expect(published.status).toBe(200);
+    expect(published.body.data.status).toBe('PUBLISHED');
   });
 
   it('replays the same idempotent request and rejects reuse with another payload', async () => {

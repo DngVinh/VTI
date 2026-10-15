@@ -16,6 +16,8 @@ import { validateEvaluationResult, validateGeneratedQuestions } from './ai/outpu
 import { evaluateThroughBoundary, generateThroughBoundary } from './ai/prompt-security';
 import { resolveGenerationSetup } from './ai/job-security';
 import type { CandidateQuestionPayload } from '../domain/interview/question-source/types';
+import { logger } from '../infrastructure/logging/logger';
+import { getEnv } from '../config/env';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -135,8 +137,7 @@ export class InterviewOperationProcessor {
         if (!interview) throw new Error('Missing interview aggregate');
         await this.startUsageAttempt(operation._id, operation.attempts, now);
         const useQuestionBank =
-          (process.env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED === 'true' ||
-            process.env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED === '1') &&
+          getEnv().INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED &&
           this.questionSourceOrchestrator;
         if (useQuestionBank) {
           const bundle = await this.questionSourceOrchestrator!.generateBundle(
@@ -179,7 +180,7 @@ export class InterviewOperationProcessor {
         );
       }
     } catch (error) {
-      console.error('OperationProcessor error caught:', error);
+      logger.error('ai.provider_failed');
       await this.handleProviderFailure(operation, leaseToken, error, usage);
       return;
     }

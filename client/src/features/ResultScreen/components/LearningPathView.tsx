@@ -20,7 +20,15 @@ export const LearningPathView: React.FC<Props> = ({ learningPath, language }) =>
     }
   };
 
-  const getPriorityLabel = (priority: string) => {
+  const getPriorityLabel = (priority: string, lang: 'vi' | 'en') => {
+    if (lang === 'en') {
+      switch (priority.toLowerCase()) {
+        case 'high': return 'High';
+        case 'medium': return 'Medium';
+        case 'low': return 'Low';
+        default: return priority;
+      }
+    }
     switch (priority.toLowerCase()) {
       case 'high': return 'Cao';
       case 'medium': return 'Trung bình';
@@ -35,7 +43,9 @@ export const LearningPathView: React.FC<Props> = ({ learningPath, language }) =>
         <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
         </div>
-        <h3 className="text-xl font-bold text-slate-800">Lộ trình học tập đề xuất</h3>
+        <h3 className="text-xl font-bold text-slate-800">
+          {language === 'vi' ? 'Lộ trình học tập đề xuất' : 'Recommended Learning Path'}
+        </h3>
       </div>
 
       <div className="space-y-4">
@@ -43,12 +53,12 @@ export const LearningPathView: React.FC<Props> = ({ learningPath, language }) =>
           <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-indigo-100 transition-colors">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h4 className="font-bold text-slate-800 text-lg">{item.topic[language] || item.topic.en}</h4>
+                <h4 className="font-bold text-slate-800 text-lg">{item.topic[language] || item.topic.en || item.topic.vi}</h4>
                 <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${getPriorityColor(item.priority)}`}>
-                  {language === 'vi' ? 'Ưu tiên' : 'Priority'}: {getPriorityLabel(item.priority)}
+                  {language === 'vi' ? 'Ưu tiên' : 'Priority'}: {getPriorityLabel(item.priority, language)}
                 </span>
               </div>
-              <p className="text-slate-600 leading-relaxed">{item.suggestion[language] || item.suggestion.en}</p>
+              <p className="text-slate-600 leading-relaxed">{item.suggestion[language] || item.suggestion.en || item.suggestion.vi}</p>
             </div>
           </div>
         ))}

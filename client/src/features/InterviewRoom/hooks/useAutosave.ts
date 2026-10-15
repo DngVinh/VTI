@@ -17,11 +17,21 @@ export const useAutosave = (
   
   // Keep track of the latest answers without triggering effects immediately
   const answersRef = useRef(answers);
-  const versionRef = useRef(version ?? 0);
-  const saveChainRef = useRef<Promise<number>>(Promise.resolve(version ?? 0));
+  const versionRef = useRef<number | undefined>(
+    typeof version === 'number' && version > 0 ? version : undefined
+  );
+  const saveChainRef = useRef<Promise<number | undefined>>(
+    Promise.resolve(versionRef.current)
+  );
 
   useEffect(() => {
-    if (version !== undefined && version > versionRef.current) versionRef.current = version;
+    if (
+      typeof version === 'number' &&
+      version > 0 &&
+      (versionRef.current === undefined || version > versionRef.current)
+    ) {
+      versionRef.current = version;
+    }
   }, [version]);
   
   useEffect(() => {
@@ -37,7 +47,7 @@ export const useAutosave = (
     }
   }, [answers, sessionId, version]);
 
-  const saveSnapshot = useCallback(async (): Promise<number> => {
+  const saveSnapshot = useCallback(async (): Promise<number | undefined> => {
     if (!sessionId || answersRef.current.length === 0) return versionRef.current;
     const snapshot = answersRef.current.map((answer) => ({ ...answer }));
     const pending = saveChainRef.current
@@ -48,9 +58,11 @@ export const useAutosave = (
           versionRef.current,
           snapshot
         );
-        versionRef.current = result.version;
-        onVersion(result.version);
-        return result.version as number;
+        if (typeof result?.version === 'number') {
+          versionRef.current = result.version;
+          onVersion(result.version);
+        }
+        return versionRef.current;
       });
     saveChainRef.current = pending;
     return pending;

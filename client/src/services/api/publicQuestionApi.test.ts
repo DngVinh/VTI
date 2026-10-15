@@ -117,4 +117,34 @@ describe('publicQuestionApi unit test', () => {
       'Question not found or not published'
     );
   });
+
+  it('fetchTaxonomyFilters fetches public taxonomy with and without roleId', async () => {
+    const mockTaxonomy = {
+      success: true,
+      data: {
+        roles: [{ id: 'r1', name: 'Backend Developer' }],
+        levels: [{ id: 'l1', name: 'Middle' }],
+        technologies: [{ id: 't1', name: 'Node.js' }],
+      },
+    };
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockTaxonomy,
+    });
+
+    const res = await publicQuestionApi.fetchTaxonomyFilters();
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/questions/public/taxonomy')
+    );
+    expect(res.roles[0]._id).toBe('r1');
+    expect(res.levels[0].name).toBe('Middle');
+    expect(res.technologies[0].name).toBe('Node.js');
+
+    const filtered = await publicQuestionApi.fetchTaxonomyFilters('r1');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/questions/public/taxonomy?roleId=r1')
+    );
+    expect(filtered.technologies.length).toBe(1);
+  });
 });

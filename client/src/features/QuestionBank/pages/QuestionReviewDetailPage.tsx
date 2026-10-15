@@ -5,6 +5,7 @@ import type { ApiError } from '../../../auth/types';
 import { questionBankApi, createIdempotencyKey, createVersionEtag } from '../api/questionBankApi';
 import { hasQuestionBankCapability } from '../capabilities';
 import type { QuestionReviewDetailDto } from '../types';
+import { AppShell } from '../../../layouts/AppShell';
 
 export const QuestionReviewDetailPage = () => {
   const { questionVersionId } = useParams();
@@ -100,8 +101,9 @@ export const QuestionReviewDetailPage = () => {
   const actions = detail.allowedActions;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8">
-      <div className="mx-auto max-w-5xl space-y-6">
+    <AppShell>
+      <main className="px-4 py-8">
+        <div className="mx-auto max-w-5xl space-y-6">
         <header>
           <Link className="font-bold text-indigo-700 hover:underline" to="/admin/question-bank/reviews">← Review queue</Link>
           <h1 className="mt-2 text-3xl font-extrabold">{detail.question.code} · Version {detail.snapshot.versionNumber}</h1>
@@ -148,5 +150,6 @@ export const QuestionReviewDetailPage = () => {
         </section>
       </div>
     </main>
-  );
+  </AppShell>
+);
 };

@@ -3,4 +3,5 @@ export default {
     const quotedFilenames = filenames.map((filename) => `"${filename.replaceAll('"', '\\"')}"`);
     return `npm run lint --prefix client -- --fix ${quotedFilenames.join(" ")}`;
   },
+  "src/**/*.{ts,js}": () => "npm run build",
 };

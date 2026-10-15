@@ -5,6 +5,7 @@ import { seedRoles } from './role.seed';
 import { seedLevels } from './level.seed';
 import { seedTechnologies } from './technology.seed';
 import { seedSystemPrompts } from './system-prompt.seed';
+import { seedQuestionBank } from './question-bank.seed';
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ const runSeeder = async () => {
     await seedRoles();
     await seedTechnologies(); // Chạy sau role để lấy ID của role
     await seedSystemPrompts();
+    await seedQuestionBank();
     console.log('====================================');
 
     console.log(' Đã hoàn tất toàn bộ quá trình Seed!');

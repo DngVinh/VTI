@@ -1,22 +1,27 @@
-import { IInterviewState, InterviewStatus } from '../IInterviewState';
-import { InterviewContext } from '../InterviewContext';
+import {
+  IInterviewState,
+  InterviewStatus,
+  IInterviewContext,
+  GeneratePayload,
+  SubmitPayload,
+  SaveProgressPayload,
+} from '../types';
 import { InvalidStateTransitionException } from '../exceptions/InvalidStateTransitionException';
-import { GeneratePayload, SubmitPayload } from '../types';
 
 export class CompletedState implements IInterviewState {
   getName(): InterviewStatus {
     return 'COMPLETED';
   }
 
-  async generate(context: InterviewContext, payload: GeneratePayload): Promise<void> {
+  async generate(_context: IInterviewContext, _payload: GeneratePayload): Promise<void> {
     throw new InvalidStateTransitionException('Interview is already COMPLETED. Cannot generate questions.');
   }
 
-  async submit(context: InterviewContext, payload: SubmitPayload): Promise<void> {
+  async submit(_context: IInterviewContext, _payload: SubmitPayload): Promise<void> {
     throw new InvalidStateTransitionException('Cannot submit answers for a COMPLETED interview.');
   }
 
-  async saveProgress(context: InterviewContext, payload: import('../types').SaveProgressPayload): Promise<void> {
+  async saveProgress(_context: IInterviewContext, _payload: SaveProgressPayload): Promise<void> {
     throw new InvalidStateTransitionException('Cannot save progress for a COMPLETED interview.');
   }
 }

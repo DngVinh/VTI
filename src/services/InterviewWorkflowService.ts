@@ -13,6 +13,7 @@ import {
   SubmissionAnswerState
 } from '../models/InterviewSubmission';
 import { UserQuotaLedgerModel } from '../models/UserQuotaLedger';
+import { JdValidatorService } from './ai/JdValidatorService';
 
 const GENERATE_ROUTE = '/api/v1/interviews/:id/generate';
 const SUBMIT_ROUTE = '/api/v1/interviews/:id/submit';
@@ -82,13 +83,25 @@ export class InterviewWorkflowService {
     mimeType: string,
     actorId: string
   ) {
-    const { FileParserFactory } = await import('../utils/parsers/FileParserFactory');
-    const parser = FileParserFactory.getParser(mimeType);
-    const jdText = await parser.parse(fileBuffer);
-    return this.createInterviewSession(
-      { ...setupData, jdText: jdText.substring(0, 10000) },
-      actorId
-    );
+    try {
+      const { FileParserFactory } = await import('../utils/parsers/FileParserFactory');
+      const parser = FileParserFactory.getParser(mimeType);
+      const jdText = await parser.parse(fileBuffer);
+      const validation = JdValidatorService.validate(jdText);
+      if (!validation.isValid) {
+        throw new AppError(
+          validation.reason || 'Nội dung tệp không phải bản mô tả công việc (JD) hợp lệ',
+          422,
+          'INVALID_JD_CONTENT',
+        );
+      }
+      return this.createInterviewSession(
+        { ...setupData, jdText: jdText.substring(0, 10000) },
+        actorId
+      );
+    } finally {
+      fileBuffer.fill(0);
+    }
   }
 
   async getInterviewSession(id: string, actorId?: string) {
@@ -208,7 +221,7 @@ export class InterviewWorkflowService {
       .map((answer) => ({
         questionId: answer.questionId,
         state: answer.state,
-        ...(answer.state === 'ANSWERED' ? { candidateAnswer: answer.candidateAnswer!.trim() } : {})
+        ...(answer.state === 'ANSWERED' ? { candidateAnswer: answer.candidateAnswer?.trim() ?? '' } : {})
       }))
       .sort((left, right) => left.questionId.localeCompare(right.questionId));
     const keyHash = sha256(idempotencyKey);
@@ -235,7 +248,10 @@ export class InterviewWorkflowService {
 
         const interview = await InterviewSessionModel.findById(id).session(mongoSession);
         this.assertOwnedInterview(interview, actorId);
-        if (interview!.status !== 'IN_PROGRESS' || interview!.version !== expectedVersion) {
+        if (
+          (interview!.status !== 'IN_PROGRESS' && interview!.status !== 'FOLLOW_UP') ||
+          interview!.version !== expectedVersion
+        ) {
           throw new AppError('Trạng thái hoặc phiên bản phiên đã thay đổi', 409, 'STATE_CONFLICT');
         }
 
@@ -245,8 +261,9 @@ export class InterviewWorkflowService {
         const persistedIds = questions.map((question) => question._id.toString()).sort();
         const submittedIds = normalizedAnswers.map((answer) => answer.questionId).sort();
         if (
-          questions.length !== 5 ||
-          submittedIds.length !== 5 ||
+          questions.length < 1 ||
+          questions.length > 5 ||
+          submittedIds.length !== questions.length ||
           submittedIds.some((questionId, index) => questionId !== persistedIds[index])
         ) {
           throw new AppError('Câu trả lời không khớp bộ câu hỏi của phiên', 400, 'VALIDATION_ERROR');
@@ -283,7 +300,7 @@ export class InterviewWorkflowService {
         }).save({ session: mongoSession });
 
         const transition = await InterviewSessionModel.updateOne(
-          { _id: id, userId: actorId, status: 'IN_PROGRESS', version: expectedVersion },
+          { _id: id, userId: actorId, status: { $in: ['IN_PROGRESS', 'FOLLOW_UP'] }, version: expectedVersion },
           {
             $set: {
               status: 'EVALUATING',
@@ -349,14 +366,17 @@ export class InterviewWorkflowService {
     actorId: string,
     expectedVersion: number,
     answers: AnswerPayload[]
-  ): Promise<{ version: number; status: 'IN_PROGRESS' }> {
+  ): Promise<{ version: number; status: 'IN_PROGRESS' | 'FOLLOW_UP' }> {
     this.requireObjectId(id, 'VALIDATION_ERROR');
     this.requireObjectId(actorId, 'AUTH_UNAUTHORIZED');
 
     return transaction(async (mongoSession) => {
       const interview = await InterviewSessionModel.findById(id).session(mongoSession);
       this.assertOwnedInterview(interview, actorId);
-      if (interview!.status !== 'IN_PROGRESS' || interview!.version !== expectedVersion) {
+      if (
+        (interview!.status !== 'IN_PROGRESS' && interview!.status !== 'FOLLOW_UP') ||
+        interview!.version !== expectedVersion
+      ) {
         throw new AppError('Bản lưu nháp đã cũ', 409, 'VERSION_CONFLICT');
       }
 
@@ -371,7 +391,7 @@ export class InterviewWorkflowService {
 
       const nextVersion = expectedVersion + 1;
       const transition = await InterviewSessionModel.updateOne(
-        { _id: id, userId: actorId, status: 'IN_PROGRESS', version: expectedVersion },
+        { _id: id, userId: actorId, status: { $in: ['IN_PROGRESS', 'FOLLOW_UP'] }, version: expectedVersion },
         { $inc: { version: 1 } },
         { session: mongoSession }
       );
@@ -390,7 +410,7 @@ export class InterviewWorkflowService {
         })),
         { session: mongoSession }
       );
-      return { version: nextVersion, status: 'IN_PROGRESS' as const };
+      return { version: nextVersion, status: interview!.status as 'IN_PROGRESS' | 'FOLLOW_UP' };
     });
   }
 

@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { ApiError } from '../../../auth/types';
-import { questionBankApi, createIdempotencyKey, createQuestionEtag, createVersionEtag } from '../api/questionBankApi';
-import { CandidatePreview } from '../components/CandidatePreview';
+import { questionBankApi, createIdempotencyKey, createVersionEtag } from '../api/questionBankApi';
 import { RubricEditor } from '../components/RubricEditor';
 import { SaveStatusIndicator } from '../components/SaveStatusIndicator';
-import { VersionHistory } from '../components/VersionHistory';
-import { TranslationModal } from '../components/TranslationModal';
-import { SemanticDuplicatePanel } from '../components/SemanticDuplicatePanel';
+import { enumLabel } from '../components/enumLabels';
 import { useSerializedAutosave } from '../hooks/useSerializedAutosave';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
-import { validateQuestionDraft } from '../schemas/questionBankSchemas';
+import { validateQuestionDraft, validateQuestionForLibrary } from '../schemas/questionBankSchemas';
+import { AppShell } from '../../../layouts/AppShell';
 import {
   DIFFICULTIES,
   QUESTION_TYPES,
@@ -25,14 +23,43 @@ import type {
 
 const inputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100';
 const sectionClass = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm';
-const splitIds = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
-const formatTechnologies = (value: QuestionVersionInput['classification']['technologies']) =>
-  value.map(({ technologyId, relevance }) => `${technologyId}${relevance === null ? '' : `:${relevance}`}`).join(', ');
-const parseTechnologies = (value: string) => splitIds(value).map((item) => {
-  const [technologyId, rawRelevance] = item.split(':');
-  const relevance = rawRelevance === undefined || rawRelevance === '' ? null : Number(rawRelevance);
-  return { technologyId, relevance: Number.isFinite(relevance) ? relevance : null };
-});
+const splitTags = (value: string) => value.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean);
+
+const standardRubric = (): QuestionVersionInput['rubric'] => [
+  {
+    key: 'core-accuracy',
+    title: { vi: 'Độ chính xác & kiến thức cốt lõi', en: 'Accuracy & Core Knowledge' },
+    description: { vi: 'Đánh giá mức độ đúng và đầy đủ của kiến thức chuyên môn.', en: 'Assesses the correctness and completeness of the technical knowledge.' },
+    weight: 60,
+    levels: [
+      { score: 0, description: { vi: 'Không trả lời hoặc sai bản chất.', en: 'No answer or fundamentally incorrect.' } },
+      { score: 1, description: { vi: 'Nêu được vài ý rời rạc, còn nhiều điểm sai.', en: 'Mentions isolated points with major inaccuracies.' } },
+      { score: 2, description: { vi: 'Trả lời đúng ý chính nhưng còn thiếu chi tiết.', en: 'Covers the main idea but misses important details.' } },
+      { score: 3, description: { vi: 'Giải thích đúng, có cấu trúc và ví dụ phù hợp.', en: 'Explains correctly with clear structure and suitable examples.' } },
+      { score: 4, description: { vi: 'Phân tích sâu, chính xác và nêu được trade-off.', en: 'Provides a deep, accurate analysis and explains trade-offs.' } },
+    ],
+  },
+  {
+    key: 'reasoning-communication',
+    title: { vi: 'Lập luận & trình bày', en: 'Reasoning & Communication' },
+    description: { vi: 'Đánh giá cách tư duy, liên kết ý và truyền đạt câu trả lời.', en: 'Assesses reasoning, connections between ideas, and communication.' },
+    weight: 40,
+    levels: [
+      { score: 0, description: { vi: 'Không thể hiện được cách tiếp cận.', en: 'Does not demonstrate an approach.' } },
+      { score: 1, description: { vi: 'Trình bày khó theo dõi, thiếu mạch lạc.', en: 'Difficult to follow and lacks coherence.' } },
+      { score: 2, description: { vi: 'Có cấu trúc cơ bản nhưng diễn giải còn hạn chế.', en: 'Has a basic structure but limited explanation.' } },
+      { score: 3, description: { vi: 'Mạch lạc, có dẫn chứng và trả lời đúng trọng tâm.', en: 'Clear, supported by examples, and focused.' } },
+      { score: 4, description: { vi: 'Rất rõ ràng, chủ động nêu giả định và hệ quả.', en: 'Exceptionally clear, stating assumptions and consequences.' } },
+    ],
+  },
+];
+
+const newQuestionVersionInput = (): QuestionVersionInput => {
+  const draft = emptyQuestionVersionInput();
+  draft.answer.estimatedTimeSeconds = 300;
+  draft.rubric = standardRubric();
+  return draft;
+};
 
 export const QuestionEditorPage = () => {
   const { questionId } = useParams();
@@ -40,9 +67,8 @@ export const QuestionEditorPage = () => {
   const navigate = useNavigate();
   const isNew = location.pathname.endsWith('/new');
   const requestedEdit = location.pathname.endsWith('/edit');
-  const [draft, setDraft] = useState<QuestionVersionInput>(emptyQuestionVersionInput);
+  const [draft, setDraft] = useState<QuestionVersionInput>(newQuestionVersionInput);
   const [detail, setDetail] = useState<QuestionAdminDetailDto | null>(null);
-  const [etag, setEtag] = useState<string | null>(null);
   const etagRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -50,17 +76,13 @@ export const QuestionEditorPage = () => {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isCreatingVersion, setIsCreatingVersion] = useState(false);
-  const [workflowBusy, setWorkflowBusy] = useState(false);
-  const [workflowNotice, setWorkflowNotice] = useState<string | null>(null);
-  const [lifecycleReason, setLifecycleReason] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
   const [newDirty, setNewDirty] = useState(false);
   const [conflict, setConflict] = useState<EditorConflict | null>(null);
-  const [copyMessage, setCopyMessage] = useState<string | null>(null);
-  const [isTranslationOpen, setIsTranslationOpen] = useState(false);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const idempotencyKeyRef = useRef(createIdempotencyKey());
   const versionIdempotencyKeyRef = useRef(createIdempotencyKey());
-  const workflowKeysRef = useRef<Record<string, string>>({});
+  const publishIdempotencyKeyRef = useRef(createIdempotencyKey());
   const activeVersion = detail?.draftVersion ?? detail?.currentPublishedVersion ?? null;
   const editable = (isNew || requestedEdit) && (!activeVersion || activeVersion.status === 'DRAFT');
 
@@ -76,7 +98,6 @@ export const QuestionEditorPage = () => {
     );
     const nextEtag = result.etag ?? createVersionEtag(result.data);
     etagRef.current = nextEtag;
-    setEtag(nextEtag);
     setDetail((current) => current ? { ...current, draftVersion: result.data } : current);
   }, [detail, questionId]);
 
@@ -100,7 +121,6 @@ export const QuestionEditorPage = () => {
       const nextEtag = result.etag ?? createVersionEtag(version);
       setDetail(result.data);
       setDraft(input);
-      setEtag(nextEtag);
       etagRef.current = nextEtag;
       markSaved(input);
     } catch (caught) {
@@ -140,7 +160,9 @@ export const QuestionEditorPage = () => {
   };
 
   const handleSave = async () => {
-    const validation = validateQuestionDraft(draft, isNew);
+    const validation = isNew
+      ? validateQuestionForLibrary(draft)
+      : validateQuestionDraft(draft);
     setValidationErrors(validation.errors);
     if (!validation.valid) {
       window.setTimeout(() => errorSummaryRef.current?.focus(), 0);
@@ -159,11 +181,49 @@ export const QuestionEditorPage = () => {
       setNewDirty(false);
       autosave.markSaved(draft);
       if (!createdDraft) throw { message: 'Server không trả về Draft vừa tạo.' } satisfies ApiError;
+      await questionBankApi.publishVersion(
+        result.data.question.id,
+        createdDraft.versionNumber,
+        result.etag ?? createVersionEtag(createdDraft),
+        publishIdempotencyKeyRef.current,
+        'Admin tạo câu hỏi và đưa vào thư viện',
+        true
+      );
       navigate(`/admin/question-bank/questions/${result.data.question.id}/edit`, { replace: true });
     } catch (caught) {
       setCreateError((caught as ApiError).message || 'Không thể tạo câu hỏi.');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handlePublishToLibrary = async () => {
+    const version = detail?.draftVersion;
+    if (!questionId || !version || !etagRef.current) return;
+    const validation = validateQuestionForLibrary(draft);
+    setValidationErrors(validation.errors);
+    if (!validation.valid) {
+      window.setTimeout(() => errorSummaryRef.current?.focus(), 0);
+      return;
+    }
+
+    setCreateError(null);
+    setIsPublishing(true);
+    try {
+      if (autosave.dirty) await autosave.saveNow();
+      await questionBankApi.publishVersion(
+        questionId,
+        version.versionNumber,
+        etagRef.current,
+        publishIdempotencyKeyRef.current,
+        'Admin đưa bản nháp vào thư viện',
+        true
+      );
+      await loadQuestion();
+    } catch (caught) {
+      setCreateError((caught as ApiError).message || 'Không thể đưa câu hỏi vào thư viện.');
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -188,77 +248,12 @@ export const QuestionEditorPage = () => {
     }
   };
 
-  const handleSubmitReview = async () => {
-    if (!questionId || !detail?.draftVersion || !etagRef.current) return;
-    if (!window.confirm(`Gửi ${detail.question.code} Version ${detail.draftVersion.versionNumber} vào review queue? Snapshot sẽ chuyển sang read-only.`)) return;
-    setWorkflowBusy(true);
-    setCreateError(null);
-    setWorkflowNotice(null);
-    const slot = `submit:${etagRef.current}`;
-    workflowKeysRef.current[slot] ??= createIdempotencyKey();
-    try {
-      if (autosave.dirty) await autosave.saveNow();
-      const result = await questionBankApi.submitReview(
-        questionId,
-        etagRef.current,
-        workflowKeysRef.current[slot]
-      );
-      const nextEtag = result.etag ?? createVersionEtag(result.data);
-      etagRef.current = nextEtag;
-      setEtag(nextEtag);
-      setDetail((current) => current ? { ...current, draftVersion: result.data } : current);
-      setWorkflowNotice('Đã gửi Draft vào review queue.');
-    } catch (caught) {
-      const apiError = caught as ApiError;
-      setCreateError(apiError.status === 409
-        ? `${apiError.message} Hãy tải lại revision mới nhất.`
-        : apiError.message || 'Không thể gửi review.');
-    } finally {
-      setWorkflowBusy(false);
-    }
-  };
-
-  const handleLifecycle = async (action: 'retire' | 'restore') => {
-    if (!questionId || !detail || lifecycleReason.trim().length < 3) {
-      setCreateError('Hãy nhập lý do lifecycle (ít nhất 3 ký tự).');
-      return;
-    }
-    const label = action === 'retire' ? 'retire' : 'restore';
-    if (!window.confirm(`Xác nhận ${label} ${detail.question.code}? Không có dữ liệu nào bị xóa.`)) return;
-    setWorkflowBusy(true);
-    setCreateError(null);
-    setWorkflowNotice(null);
-    const aggregateEtag = createQuestionEtag(detail.question);
-    const slot = `${action}:${aggregateEtag}`;
-    workflowKeysRef.current[slot] ??= createIdempotencyKey();
-    try {
-      const result = await questionBankApi.transitionLifecycle(
-        questionId,
-        action,
-        lifecycleReason.trim(),
-        aggregateEtag,
-        workflowKeysRef.current[slot]
-      );
-      setDetail(result.data);
-      setLifecycleReason('');
-      setWorkflowNotice(action === 'retire' ? 'Câu hỏi đã được retire.' : 'Câu hỏi đã được restore.');
-    } catch (caught) {
-      const apiError = caught as ApiError;
-      setCreateError(apiError.status === 409
-        ? `${apiError.message} Hãy tải lại trước khi thử lại.`
-        : apiError.message || `Không thể ${label} câu hỏi.`);
-    } finally {
-      setWorkflowBusy(false);
-    }
-  };
-
   const loadServerCopy = () => {
     const serverDraft = conflict?.server?.draftVersion;
     if (!serverDraft) return;
     const serverInput = toVersionInput(serverDraft);
     setDraft(serverInput);
     const nextEtag = conflict?.serverEtag ?? createVersionEtag(serverDraft);
-    setEtag(nextEtag);
     etagRef.current = nextEtag;
     setDetail(conflict.server);
     setConflict(null);
@@ -266,26 +261,22 @@ export const QuestionEditorPage = () => {
     autosave.markSaved(serverInput);
   };
 
-  const copyLocalDraft = async () => {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(draft, null, 2));
-      setCopyMessage('Đã sao chép bản local vào clipboard theo yêu cầu của bạn.');
-    } catch {
-      setCopyMessage('Trình duyệt không cho phép sao chép. Dữ liệu local vẫn được giữ nguyên trên form.');
-    }
-  };
-
   if (loading) return <main className="p-12 text-center" role="status" aria-live="polite">Đang tải Question Editor…</main>;
   if (loadError) return <main className="p-12 text-center" role="alert"><p className="font-bold text-red-700">{loadError}</p><button className="mt-4 rounded-lg border px-4 py-2" onClick={() => void loadQuestion()} type="button">Thử lại</button></main>;
 
+  const hasPromptVi = Boolean(draft.content.prompt.vi.trim());
+  const hasPromptEn = Boolean(draft.content.prompt.en.trim());
+
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <AppShell>
+      <main className="px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Link className="text-sm font-bold text-indigo-700 hover:underline" to="/admin/question-bank">← Ngân hàng câu hỏi</Link>
-            <h1 className="mt-2 text-3xl font-extrabold text-slate-950">{isNew ? 'Tạo Draft mới' : `${detail?.question.code ?? 'Question'} · Version ${activeVersion?.versionNumber ?? '—'}`}</h1>
-            {!isNew && <p className="mt-1 text-sm text-slate-600">Revision {activeVersion?.revision ?? '—'} · ETag {etag ?? 'không khả dụng'}</p>}
+            <Link className="text-sm font-bold text-indigo-700 hover:underline" to="/admin/question-bank">← Quản lý câu hỏi</Link>
+            <p className="mt-4 text-sm font-bold uppercase tracking-widest text-indigo-700">{isNew ? 'Tạo mới' : 'Chỉnh sửa'}</p>
+            <h1 className="mt-1 text-3xl font-extrabold text-slate-950">{isNew ? 'Tạo câu hỏi mới' : detail?.question.code ?? 'Câu hỏi'}</h1>
+            <p className="mt-2 text-sm text-slate-600">{isNew ? 'Nhập thông tin cốt lõi rồi lưu để đưa ngay vào thư viện.' : 'Chỉnh sửa nội dung và thông tin chính của câu hỏi.'}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {!isNew && <SaveStatusIndicator status={autosave.status} />}
@@ -296,41 +287,26 @@ export const QuestionEditorPage = () => {
                 onClick={() => void handleCreateVersion()}
                 type="button"
               >
-                {isCreatingVersion ? 'Đang tạo Draft…' : 'Tạo Draft từ bản Published'}
+                {isCreatingVersion ? 'Đang tạo…' : 'Tạo bản nháp chỉnh sửa'}
+              </button>
+            )}
+            {!isNew && detail?.draftVersion && (
+              <button
+                className="rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-50"
+                disabled={isPublishing}
+                onClick={() => void handlePublishToLibrary()}
+                type="button"
+              >
+                {isPublishing ? 'Đang đưa vào…' : 'Đưa vào thư viện'}
               </button>
             )}
             {!requestedEdit && !isNew && detail?.draftVersion && <Link className="rounded-lg border border-indigo-300 px-4 py-2 font-bold text-indigo-700" to={`/admin/question-bank/questions/${questionId}/edit`}>Chỉnh sửa Draft</Link>}
-            {!isNew && detail?.draftVersion?.status === 'DRAFT' && (
-              <button
-                className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 font-bold text-purple-700 hover:bg-purple-100 disabled:opacity-50"
-                disabled={workflowBusy}
-                onClick={() => setIsTranslationOpen(true)}
-                type="button"
-              >
-                AI Translate
-              </button>
-            )}
-            {editable && <button className="rounded-lg bg-indigo-600 px-5 py-2 font-bold text-white disabled:opacity-50" disabled={isCreating || autosave.status === 'saving' || autosave.status === 'conflict'} onClick={() => void handleSave()} type="button">{isCreating ? 'Đang tạo…' : autosave.status === 'saving' ? 'Đang lưu…' : 'Lưu ngay'}</button>}
-            {!isNew && detail?.draftVersion?.status === 'DRAFT' && <button className="rounded-lg bg-emerald-700 px-4 py-2 font-bold text-white disabled:opacity-50" disabled={workflowBusy || autosave.status === 'saving' || autosave.status === 'conflict'} onClick={() => void handleSubmitReview()} type="button">{workflowBusy ? 'Đang xử lý…' : 'Gửi review'}</button>}
+            {editable && <button className="rounded-lg bg-indigo-600 px-5 py-2 font-bold text-white shadow-sm disabled:opacity-50" disabled={isCreating || autosave.status === 'saving' || autosave.status === 'conflict' || isPublishing} onClick={() => void handleSave()} type="button">{isCreating ? 'Đang tạo…' : autosave.status === 'saving' ? 'Đang lưu…' : isNew ? 'Thêm vào thư viện' : 'Lưu thay đổi'}</button>}
           </div>
         </header>
 
-        {!isNew && detail && (
-          <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="lifecycle-heading">
-            <h2 className="font-extrabold" id="lifecycle-heading">Lifecycle</h2>
-            <div className="mt-3 flex flex-wrap items-end gap-3">
-              <label className="min-w-64 flex-1 text-sm font-bold">Lý do
-                <input className={inputClass} maxLength={5000} onChange={(event) => setLifecycleReason(event.target.value)} value={lifecycleReason} />
-              </label>
-              {detail.question.lifecycleStatus === 'ACTIVE'
-                ? <button className="rounded-lg bg-slate-800 px-4 py-2 font-bold text-white disabled:opacity-50" disabled={workflowBusy} onClick={() => void handleLifecycle('retire')} type="button">Retire</button>
-                : <button className="rounded-lg bg-indigo-700 px-4 py-2 font-bold text-white disabled:opacity-50" disabled={workflowBusy} onClick={() => void handleLifecycle('restore')} type="button">Restore</button>}
-            </div>
-          </section>
-        )}
-        {workflowNotice && <p className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 font-bold text-emerald-800" aria-live="polite">{workflowNotice}</p>}
-
-        {requestedEdit && !detail?.draftVersion && <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900" role="alert">Không có active Draft. Published/Superseded là immutable trong Phase 1.</p>}
+        {!isNew && activeVersion && <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">Phiên bản {activeVersion.versionNumber} · Revision {activeVersion.revision} · Trạng thái: <strong className="text-slate-900">{activeVersion.status}</strong></p>}
+        {requestedEdit && !detail?.draftVersion && <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900" role="alert">Câu hỏi này chưa có bản nháp để chỉnh sửa. Hãy tạo bản nháp chỉnh sửa trước.</p>}
         {(Object.keys(validationErrors).length > 0 || createError || autosave.status === 'error') && (
           <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-900" ref={errorSummaryRef} role="alert" tabIndex={-1}>
             <h2 className="font-extrabold">Không thể lưu vì có lỗi</h2>
@@ -346,107 +322,63 @@ export const QuestionEditorPage = () => {
             <p className="mt-2 text-sm"><strong>Server revision:</strong> {conflict.server?.draftVersion?.revision ?? 'không tải được'}</p>
             <p className="mt-1 whitespace-pre-wrap text-sm"><strong>Server prompt VI:</strong> {conflict.server?.draftVersion?.content.prompt.vi || '—'}</p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <button className="rounded-lg border border-red-300 bg-white px-4 py-2 font-bold" onClick={() => void copyLocalDraft()} type="button">Sao chép bản local</button>
               <button className="rounded-lg bg-red-700 px-4 py-2 font-bold text-white disabled:opacity-50" disabled={!conflict.server?.draftVersion} onClick={loadServerCopy} type="button">Bỏ bản local và nạp bản server</button>
             </div>
-            {copyMessage && <p aria-live="polite" className="mt-2 text-sm">{copyMessage}</p>}
           </section>
         )}
 
         <fieldset className={sectionClass} disabled={!editable}>
-          <legend className="px-1 text-xl font-extrabold text-slate-900">Content</legend>
-          <div className="mt-3 grid gap-4 md:grid-cols-2">
-            <TextArea label="Prompt tiếng Việt" maxLength={5_000} value={draft.content.prompt.vi} onChange={(vi) => changeDraft((current) => ({ ...current, content: { ...current.content, prompt: { ...current.content.prompt, vi } } }))} />
-            <TextArea label="Prompt English" maxLength={5_000} value={draft.content.prompt.en} onChange={(en) => changeDraft((current) => ({ ...current, content: { ...current.content, prompt: { ...current.content.prompt, en } } }))} />
-            <TextArea label="Giải thích tiếng Việt (tùy chọn)" maxLength={5_000} value={draft.content.explanation?.vi ?? ''} onChange={(vi) => changeDraft((current) => ({ ...current, content: { ...current.content, explanation: { vi, en: current.content.explanation?.en ?? '' } } }))} />
-            <TextArea label="Explanation English (optional)" maxLength={5_000} value={draft.content.explanation?.en ?? ''} onChange={(en) => changeDraft((current) => ({ ...current, content: { ...current.content, explanation: { vi: current.content.explanation?.vi ?? '', en } } }))} />
+          <legend className="px-1 text-xl font-extrabold text-slate-900">Nội dung câu hỏi</legend>
+          <p className="mt-1 text-sm text-slate-500">Viết câu hỏi và lời giải thích tương ứng; tiếng Anh có thể bổ sung sau.</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <TextArea label="Câu hỏi (VI)" maxLength={5_000} required value={draft.content.prompt.vi} onChange={(vi) => changeDraft((current) => ({ ...current, content: { ...current.content, prompt: { ...current.content.prompt, vi } } }))} />
+            <TextArea label="Câu hỏi (EN) — tùy chọn" maxLength={5_000} value={draft.content.prompt.en} onChange={(en) => changeDraft((current) => ({ ...current, content: { ...current.content, prompt: { ...current.content.prompt, en } } }))} />
+            <TextArea label="Giải thích (VI)" maxLength={5_000} required={hasPromptVi} value={draft.content.explanation?.vi ?? ''} onChange={(vi) => changeDraft((current) => ({ ...current, content: { ...current.content, explanation: { vi, en: current.content.explanation?.en ?? '' } } }))} />
+            <TextArea label="Giải thích (EN) — tùy chọn" maxLength={5_000} required={hasPromptEn} value={draft.content.explanation?.en ?? ''} onChange={(en) => changeDraft((current) => ({ ...current, content: { ...current.content, explanation: { vi: current.content.explanation?.vi ?? '', en } } }))} />
           </div>
         </fieldset>
 
         <fieldset className={sectionClass} disabled={!editable}>
-          <legend className="px-1 text-xl font-extrabold text-slate-900">Classification</legend>
-          <div className="mt-3 grid gap-4 md:grid-cols-2">
-            <Field label="Primary role ID" value={draft.classification.primaryRoleId ?? ''} onChange={(primaryRoleId) => changeDraft((current) => ({ ...current, classification: { ...current.classification, primaryRoleId: primaryRoleId.trim() || null } }))} />
-            <Field label="Additional role IDs (phân cách bằng dấu phẩy)" value={draft.classification.additionalRoleIds.join(', ')} onChange={(value) => changeDraft((current) => ({ ...current, classification: { ...current.classification, additionalRoleIds: splitIds(value) } }))} />
-            <Field label="Level IDs (phân cách bằng dấu phẩy)" value={draft.classification.levelIds.join(', ')} onChange={(value) => changeDraft((current) => ({ ...current, classification: { ...current.classification, levelIds: splitIds(value) } }))} />
-            <Field label="Technologies: ObjectId:relevance (phân cách bằng dấu phẩy)" value={formatTechnologies(draft.classification.technologies)} onChange={(value) => changeDraft((current) => ({ ...current, classification: { ...current.classification, technologies: parseTechnologies(value) } }))} />
-            <Field label="Topic" value={draft.classification.topic ?? ''} onChange={(topic) => changeDraft((current) => ({ ...current, classification: { ...current.classification, topic: topic || null } }))} />
-            <Field label="Tags kebab-case (phân cách bằng dấu phẩy)" value={draft.classification.tags.join(', ')} onChange={(value) => changeDraft((current) => ({ ...current, classification: { ...current.classification, tags: splitIds(value.toLowerCase()) } }))} />
-            <SelectField label="Độ khó" options={[...DIFFICULTIES]} value={draft.classification.difficulty ?? ''} onChange={(difficulty) => changeDraft((current) => ({ ...current, classification: { ...current.classification, difficulty: difficulty || null } }))} />
+          <legend className="px-1 text-xl font-extrabold text-slate-900">Thông tin nhanh</legend>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
             <SelectField label="Loại câu hỏi" options={[...QUESTION_TYPES]} value={draft.classification.type ?? ''} onChange={(type) => changeDraft((current) => ({ ...current, classification: { ...current.classification, type: type || null } }))} />
-            <label className="flex items-center gap-2 font-semibold"><input checked={draft.classification.technologyAgnostic} onChange={(event) => changeDraft((current) => ({ ...current, classification: { ...current.classification, technologyAgnostic: event.target.checked } }))} type="checkbox" /> Technology-agnostic</label>
-            <label className="flex items-center gap-2 font-semibold"><input checked={draft.classification.classificationComplete} onChange={(event) => changeDraft((current) => ({ ...current, classification: { ...current.classification, classificationComplete: event.target.checked } }))} type="checkbox" /> Đánh dấu classification hoàn tất</label>
+            <SelectField label="Độ khó" options={[...DIFFICULTIES]} value={draft.classification.difficulty ?? ''} onChange={(difficulty) => changeDraft((current) => ({ ...current, classification: { ...current.classification, difficulty: difficulty || null } }))} />
+            <Field label="Topic — tùy chọn" value={draft.classification.topic ?? ''} onChange={(topic) => changeDraft((current) => ({ ...current, classification: { ...current.classification, topic: topic.trim() || null } }))} />
+            <Field label="Tags — phân cách bằng dấu phẩy" value={draft.classification.tags.join(', ')} onChange={(value) => changeDraft((current) => ({ ...current, classification: { ...current.classification, tags: splitTags(value) } }))} />
           </div>
         </fieldset>
 
         <fieldset className={sectionClass} disabled={!editable}>
-          <legend className="px-1 text-xl font-extrabold text-slate-900">Answer &amp; Rubric</legend>
-          <div className="mt-3 grid gap-4 md:grid-cols-2">
-            <TextArea label="Reference answer VI" maxLength={20_000} value={draft.answer.referenceAnswer.vi} onChange={(vi) => changeDraft((current) => ({ ...current, answer: { ...current.answer, referenceAnswer: { ...current.answer.referenceAnswer, vi } } }))} />
-            <TextArea label="Reference answer EN" maxLength={20_000} value={draft.answer.referenceAnswer.en} onChange={(en) => changeDraft((current) => ({ ...current, answer: { ...current.answer, referenceAnswer: { ...current.answer.referenceAnswer, en } } }))} />
-            <TextArea label="Learning objective VI" maxLength={1_000} value={draft.answer.learningObjective.vi} onChange={(vi) => changeDraft((current) => ({ ...current, answer: { ...current.answer, learningObjective: { ...current.answer.learningObjective, vi } } }))} />
-            <TextArea label="Learning objective EN" maxLength={1_000} value={draft.answer.learningObjective.en} onChange={(en) => changeDraft((current) => ({ ...current, answer: { ...current.answer, learningObjective: { ...current.answer.learningObjective, en } } }))} />
+          <legend className="px-1 text-xl font-extrabold text-slate-900">Đáp án & tiêu chí chấm điểm</legend>
+          <p className="mt-1 text-sm text-slate-500">Các trường này giúp câu hỏi hiển thị đầy đủ như QB-2026-000001.</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <TextArea label="Đáp án (VI)" maxLength={20_000} required={hasPromptVi} value={draft.answer.referenceAnswer.vi} onChange={(vi) => changeDraft((current) => ({ ...current, answer: { ...current.answer, referenceAnswer: { ...current.answer.referenceAnswer, vi } } }))} />
+            <TextArea label="Đáp án (EN) — tùy chọn" maxLength={20_000} required={hasPromptEn} value={draft.answer.referenceAnswer.en} onChange={(en) => changeDraft((current) => ({ ...current, answer: { ...current.answer, referenceAnswer: { ...current.answer.referenceAnswer, en } } }))} />
+            <TextArea label="Mục tiêu đánh giá (VI)" maxLength={1_000} required={hasPromptVi} value={draft.answer.learningObjective.vi} onChange={(vi) => changeDraft((current) => ({ ...current, answer: { ...current.answer, learningObjective: { ...current.answer.learningObjective, vi } } }))} />
+            <TextArea label="Mục tiêu đánh giá (EN) — tùy chọn" maxLength={1_000} required={hasPromptEn} value={draft.answer.learningObjective.en} onChange={(en) => changeDraft((current) => ({ ...current, answer: { ...current.answer, learningObjective: { ...current.answer.learningObjective, en } } }))} />
             <label className="text-sm font-semibold text-slate-700">Thời gian dự kiến (giây)
-              <input className={inputClass} max={3600} min={30} onChange={(event) => changeDraft((current) => ({ ...current, answer: { ...current.answer, estimatedTimeSeconds: event.target.value ? Number(event.target.value) : null } }))} type="number" value={draft.answer.estimatedTimeSeconds ?? ''} />
+              <input className={inputClass} max={3_600} min={30} onChange={(event) => changeDraft((current) => ({ ...current, answer: { ...current.answer, estimatedTimeSeconds: event.target.value ? Number(event.target.value) : null } }))} type="number" value={draft.answer.estimatedTimeSeconds ?? ''} />
             </label>
           </div>
-          <div className="mt-5 space-y-3">
-            <h3 className="font-extrabold text-slate-900">Follow-up questions ({draft.answer.followUps.length}/5)</h3>
-            {draft.answer.followUps.map((followUp, index) => (
-              <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]" key={index}>
-                <Field label={`Follow-up ${index + 1} VI`} value={followUp.vi} onChange={(vi) => changeDraft((current) => ({ ...current, answer: { ...current.answer, followUps: current.answer.followUps.map((item, itemIndex) => itemIndex === index ? { ...item, vi } : item) } }))} />
-                <Field label={`Follow-up ${index + 1} EN`} value={followUp.en} onChange={(en) => changeDraft((current) => ({ ...current, answer: { ...current.answer, followUps: current.answer.followUps.map((item, itemIndex) => itemIndex === index ? { ...item, en } : item) } }))} />
-                {editable && <button className="self-end rounded-lg border border-red-200 px-3 py-2 font-bold text-red-700" onClick={() => changeDraft((current) => ({ ...current, answer: { ...current.answer, followUps: current.answer.followUps.filter((_, itemIndex) => itemIndex !== index) } }))} type="button">Xóa</button>}
-              </div>
-            ))}
-            {editable && <button className="rounded-lg border px-4 py-2 font-bold disabled:opacity-40" disabled={draft.answer.followUps.length >= 5} onClick={() => changeDraft((current) => ({ ...current, answer: { ...current.answer, followUps: [...current.answer.followUps, { vi: '', en: '' }] } }))} type="button">Thêm follow-up</button>}
+          <div className="mt-6 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+            <p className="mb-4 text-sm text-indigo-900">Rubric 0–4 đã được điền sẵn 2 tiêu chí và đủ 5 mức điểm. Bạn chỉ cần tinh chỉnh cho sát câu hỏi nếu cần.</p>
+            <RubricEditor onChange={(rubric) => changeDraft((current) => ({ ...current, rubric }))} value={draft.rubric} />
           </div>
-          <div className="mt-6"><RubricEditor disabled={!editable} onChange={(rubric) => changeDraft((current) => ({ ...current, rubric }))} value={draft.rubric} /></div>
         </fieldset>
-
-        <section className={sectionClass}>
-          <TextArea disabled={!editable} label="Change summary (tối đa 1.000 ký tự)" maxLength={1_000} value={draft.changeSummary} onChange={(changeSummary) => changeDraft((current) => ({ ...current, changeSummary }))} />
-        </section>
-        <SemanticDuplicatePanel
-          questionId={questionId}
-          versionNumber={activeVersion?.versionNumber}
-          draft={draft}
-        />
-        <CandidatePreview classification={draft.classification} prompt={draft.content.prompt} />
-        {!isNew && questionId && <VersionHistory questionId={questionId} />}
-
-        {detail?.draftVersion && questionId && (
-          <TranslationModal
-            isOpen={isTranslationOpen}
-            onClose={() => setIsTranslationOpen(false)}
-            questionId={questionId}
-            versionNumber={detail.draftVersion.versionNumber}
-            currentDraft={draft}
-            etag={etag}
-            onApplied={(updated, newEtag) => {
-              const nextInput = toVersionInput(updated);
-              setDraft(nextInput);
-              setEtag(newEtag);
-              etagRef.current = newEtag;
-              setDetail((curr) => (curr ? { ...curr, draftVersion: updated } : curr));
-              setWorkflowNotice('Đã áp dụng bản dịch thành công.');
-              autosave.markSaved(nextInput);
-            }}
-          />
-        )}
       </div>
     </main>
-  );
+  </AppShell>
+);
 };
 
 const Field = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => (
   <label className="text-sm font-semibold text-slate-700">{label}<input className={inputClass} onChange={(event) => onChange(event.target.value)} value={value} /></label>
 );
 
-const TextArea = ({ label, value, onChange, maxLength, disabled = false }: { label: string; value: string; onChange: (value: string) => void; maxLength: number; disabled?: boolean }) => (
-  <label className="text-sm font-semibold text-slate-700">{label}<textarea className={`${inputClass} min-h-28`} disabled={disabled} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} value={value} /></label>
+const TextArea = ({ label, value, onChange, maxLength, disabled = false, required = false }: { label: string; value: string; onChange: (value: string) => void; maxLength: number; disabled?: boolean; required?: boolean }) => (
+  <label className="text-sm font-semibold text-slate-700">{label}<textarea aria-label={label} aria-required={required} className={`${inputClass} min-h-28`} disabled={disabled} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} required={required} value={value} /></label>
 );
 
 const SelectField = ({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) => (
-  <label className="text-sm font-semibold text-slate-700">{label}<select className={inputClass} onChange={(event) => onChange(event.target.value)} value={value}><option value="">Chưa chọn</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+  <label className="text-sm font-semibold text-slate-700">{label}<select className={inputClass} onChange={(event) => onChange(event.target.value)} value={value}><option value="">Chưa chọn</option>{options.map((option) => <option key={option} value={option}>{enumLabel(option)}</option>)}</select></label>
 );

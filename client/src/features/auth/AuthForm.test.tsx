@@ -184,4 +184,22 @@ describe('auth pages', () => {
     expect(screen.getByRole('link', { name: 'Về trang chủ' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'Đăng nhập' })).toHaveAttribute('href', '/login');
   });
+
+  it('renders English labels when I18nContext is English', async () => {
+    const { I18nProvider } = await import('../../locales/I18nContext');
+
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <I18nProvider defaultLocale="en">
+          <LoginPage />
+        </I18nProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign Up' })).toBeInTheDocument();
+  });
 });

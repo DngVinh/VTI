@@ -12,6 +12,7 @@ import {
 import {
   InterviewSessionModel,
 } from '../models/InterviewSession';
+import { logger } from '../infrastructure/logging/logger';
 
 import {
   IInterviewQuotaService,
@@ -183,10 +184,7 @@ export class InterviewQuotaMiddleware {
              * sent. Log the failure instead of throwing into
              * Express after the response lifecycle.
              */
-            console.error(
-              '[QUO-01] Failed to commit interview quota:',
-              error
-            );
+            logger.error('http.error.internal');
           }
         };
 
@@ -204,10 +202,7 @@ export class InterviewQuotaMiddleware {
               idempotencyKey
             );
           } catch (error) {
-            console.error(
-              '[QUO-01] Failed to release interview quota:',
-              error
-            );
+            logger.error('http.error.internal');
           }
         };
 

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { QuestionBankDomainError } from '../../domain/question-bank/errors';
 import { AiDraftSpec, GeneratedQuestionDraft } from '../../domain/question-bank/types';
 import { IAiQuestionDraftProvider } from '../interfaces/IAiQuestionDraftProvider';
+import { getEnv } from '../../config/env';
 
 const rubricLevelSchema = z.object({
   score: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
@@ -64,10 +65,11 @@ export class GeminiAiQuestionDraftProvider implements IAiQuestionDraftProvider {
   private maxRetries: number;
 
   constructor() {
-    const apiKey = process.env.GEMINI_API_KEY || '';
-    this.modelName = process.env.QUESTION_BANK_AI_MODEL || 'gemini-2.5-flash';
-    this.timeoutMs = parseInt(process.env.QUESTION_BANK_AI_TIMEOUT_MS || '10000', 10);
-    this.maxRetries = parseInt(process.env.QUESTION_BANK_AI_MAX_RETRIES || '2', 10);
+    const env = getEnv();
+    const apiKey = env.GEMINI_API_KEY || '';
+    this.modelName = env.QUESTION_BANK_AI_MODEL || 'gemini-2.5-flash';
+    this.timeoutMs = env.QUESTION_BANK_AI_TIMEOUT_MS;
+    this.maxRetries = env.QUESTION_BANK_AI_MAX_RETRIES;
 
     if (apiKey.trim()) {
       this.genAI = new GoogleGenerativeAI(apiKey);

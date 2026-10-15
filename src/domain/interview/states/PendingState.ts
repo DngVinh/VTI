@@ -1,8 +1,13 @@
-import { IInterviewState, InterviewStatus } from '../IInterviewState';
-import { InterviewContext } from '../InterviewContext';
+import {
+  IInterviewState,
+  InterviewStatus,
+  IInterviewContext,
+  GeneratePayload,
+  SubmitPayload,
+  SaveProgressPayload,
+} from '../types';
 import { GeneratingState } from './GeneratingState';
 import { InvalidStateTransitionException } from '../exceptions/InvalidStateTransitionException';
-import { GeneratePayload, SubmitPayload, SaveProgressPayload } from '../types';
 import { generateSafely } from '../../../services/ai/prompt-security';
 import { resolveGenerationSetup } from '../../../services/ai/job-security';
 import { logger } from '../../../infrastructure/logging/logger';
@@ -15,7 +20,7 @@ export class PendingState
   }
 
   async generate(
-    context: InterviewContext,
+    context: IInterviewContext,
     payload: GeneratePayload
   ): Promise<void> {
     logger.info('interview.generating', {
@@ -74,22 +79,14 @@ export class PendingState
       }
     } catch (error) {
       // If fail, transition to FailedState
-      const {
-        FailedState
-      } = await import(
-        './FailedState'
-      );
-
-      await context.changeState(
-        new FailedState()
-      );
+      await context.changeState('FAILED');
 
       throw error;
     }
   }
 
   async submit(
-    _context: InterviewContext,
+    _context: IInterviewContext,
     _payload: SubmitPayload
   ): Promise<void> {
     throw new InvalidStateTransitionException(
@@ -98,7 +95,7 @@ export class PendingState
   }
 
   async saveProgress(
-    _context: InterviewContext,
+    _context: IInterviewContext,
     _payload: SaveProgressPayload
   ): Promise<void> {
     throw new InvalidStateTransitionException(

@@ -344,7 +344,10 @@ export const reviewDecisionSchema = z
 
 export const publishQuestionVersionSchema = z
   .object({
-    body: z.object({ reason: reasonSchema.optional() }).strict(),
+    body: z.object({
+      reason: reasonSchema.optional(),
+      direct: z.boolean().optional(),
+    }).strict(),
     query: z.object({}).strict(),
     params: questionVersionParamsSchema,
   })

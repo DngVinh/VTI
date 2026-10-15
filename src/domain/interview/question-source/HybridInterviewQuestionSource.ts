@@ -18,6 +18,7 @@ import { createContentHash, normalizePromptFingerprint } from '../../question-ba
 import { IAiProvider, AiUsageMetadata } from '../types';
 import { AppError } from '../../../utils/AppError';
 import { generateThroughBoundary } from '../../../services/ai/prompt-security';
+import { getEnv } from '../../../config/env';
 
 @injectable()
 export class HybridInterviewQuestionSource implements IInterviewQuestionSource {
@@ -93,8 +94,7 @@ export class HybridInterviewQuestionSource implements IInterviewQuestionSource {
 
     const allowFallback =
       this.allowFallbackToAi &&
-      process.env.INTERVIEW_QUESTION_BANK_ALLOW_FALLBACK_TO_AI !== 'false' &&
-      process.env.INTERVIEW_QUESTION_BANK_ALLOW_FALLBACK_TO_AI !== '0';
+      getEnv().INTERVIEW_QUESTION_BANK_ALLOW_FALLBACK_TO_AI;
 
     if (selectedBankQuestions.length < totalBankNeeded && !allowFallback) {
       throw new AppError(

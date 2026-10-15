@@ -257,8 +257,20 @@ describe('AIP-55 interview setup and ownership contracts', () => {
     expect(stored?.version).toBe(0);
   });
 
+  const validMockJd = `
+    Tuyển dụng Lập trình viên Backend NodeJS (Senior Developer).
+    Mô tả công việc:
+    - Phát triển API RESTful và Microservices sử dụng Node.js, TypeScript.
+    - Làm việc với cơ sở dữ liệu MongoDB, Redis và tối ưu hóa hệ thống.
+    Yêu cầu công việc:
+    - Tối thiểu 3 năm kinh nghiệm lập trình backend với JavaScript, Node.js.
+    - Hiểu biết sâu sắc về kiến trúc phần mềm, Docker và Git.
+    Quyền lợi:
+    - Mức lương cạnh tranh, chế độ đãi ngộ hấp dẫn.
+  `.trim();
+
   it('accepts a valid JD setup without invoking an external service', async () => {
-    const parser = vi.spyOn(PdfParser.prototype, 'parse').mockResolvedValueOnce('Bounded local JD text');
+    const parser = vi.spyOn(PdfParser.prototype, 'parse').mockResolvedValueOnce(validMockJd);
     const response = await request(app)
       .post('/api/v1/interviews/generate-from-jd')
       .set(bearer(candidate))
@@ -272,8 +284,25 @@ describe('AIP-55 interview setup and ownership contracts', () => {
       .expect(201);
 
     expect(parser).toHaveBeenCalledOnce();
-    expect(response.body.data.setupData.jdText).toBe('Bounded local JD text');
+    expect(response.body.data.setupData.jdText).toBe(validMockJd);
     expect(response.body.data.userId).toBe(candidate.user._id.toString());
+  });
+
+  it('rejects JD setup with 422 INVALID_JD_CONTENT when file content is unrelated to JD', async () => {
+    const unrelatedText = 'Hướng dẫn nấu phở bò: thịt bò, xương ống, ninh trong 6 tiếng, thêm quế hồi và hành lá chan nước dùng.';
+    const parser = vi.spyOn(PdfParser.prototype, 'parse').mockResolvedValueOnce(unrelatedText);
+    const response = await request(app)
+      .post('/api/v1/interviews/generate-from-jd')
+      .set(bearer(candidate))
+      .field('language', 'VI')
+      .attach('jdFile', Buffer.from('%PDF-1.7 local fixture'), {
+        filename: 'recipe.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(422);
+
+    expect(parser).toHaveBeenCalledOnce();
+    expect(response.body.code).toBe('INVALID_JD_CONTENT');
   });
 
   it('applies upload type and size boundaries after authentication', async () => {

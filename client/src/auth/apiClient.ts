@@ -107,7 +107,9 @@ export const requestWithMetadata = async <T>(
   const method = (init.method ?? 'GET').toUpperCase();
   const noRefresh = AUTH_ENDPOINTS.has(normalizedPath.toLowerCase());
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   const accessToken = getAccessToken();
   if (accessToken && !noRefresh) headers.set('Authorization', `Bearer ${accessToken}`);
 
@@ -180,3 +182,13 @@ export const getProfile = () => request<User>('profile');
 
 export const updateProfile = (body: unknown) =>
   request<User>('profile', { method: 'PATCH', body: JSON.stringify(body) });
+
+export const uploadAvatar = async (file: File) => {
+  const formData = new FormData();
+  formData.append('avatar', file);
+  return request<{ avatarUrl: string; user: User }>('profile/avatar', {
+    method: 'POST',
+    body: formData,
+  });
+};
+

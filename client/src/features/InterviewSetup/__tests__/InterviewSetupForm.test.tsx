@@ -171,4 +171,106 @@ describe('InterviewSetupForm', () => {
     // Successful setup navigates to the newly created interview session.
     expect(await screen.findByText('Interview session opened')).toBeInTheDocument();
   });
+
+  it('renders live session brief preview card with dynamic updates in manual mode', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Đang tải cấu hình hệ thống...')).not.toBeInTheDocument();
+    });
+
+    // Verify Session Brief card is rendered
+    expect(screen.getByText('Thông số phiên phỏng vấn')).toBeInTheDocument();
+    expect(screen.getByText('Vị trí chuẩn hóa')).toBeInTheDocument();
+    expect(screen.getByText('Chưa chọn công nghệ nào')).toBeInTheDocument();
+
+    // Select role and level
+    await user.selectOptions(screen.getByLabelText(/Chức danh ứng tuyển/i), 'r1');
+    await user.click(screen.getByLabelText('Junior'));
+
+    // Select technology
+    await user.click(screen.getByRole('button', { name: 'React' }));
+
+    // Brief card should update with selected names
+    expect(screen.getAllByText('Frontend Developer').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Junior').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('React').length).toBeGreaterThanOrEqual(2); // One in picker, one in brief preview
+
+    // Studio brief CTA button should be enabled
+    const briefSubmitBtn = screen.getByRole('button', { name: /Bắt Đầu Phỏng Vấn Ngay/i });
+    expect(briefSubmitBtn).not.toBeDisabled();
+
+    // Clicking brief submit triggers setupInterview
+    await user.click(briefSubmitBtn);
+    expect(interviewApi.setupInterview).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Interview session opened')).toBeInTheDocument();
+  });
+
+  it('renders live session brief preview card updates in JD upload mode', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Đang tải cấu hình hệ thống...')).not.toBeInTheDocument();
+    });
+
+    // Switch to JD mode
+    await user.click(screen.getByRole('button', { name: /Tải Lên JD/i }));
+
+    // Verify JD brief mode
+    expect(screen.getByText('Theo bản JD')).toBeInTheDocument();
+    expect(screen.getByText('Chưa chọn tệp JD')).toBeInTheDocument();
+
+    // Upload file
+    const fileInput = document.getElementById('jdFile') as HTMLInputElement;
+    const file = new File(['mock JD content'], 'frontend-lead.pdf', { type: 'application/pdf' });
+    await user.upload(fileInput, file);
+
+    // Brief should display uploaded file name
+    expect(await screen.findByText('frontend-lead.pdf')).toBeInTheDocument();
+
+    // Studio brief CTA button should be enabled and submit successfully
+    const briefSubmitBtn = screen.getByRole('button', { name: /Phân Tích JD & Bắt Đầu Phỏng Vấn/i });
+    expect(briefSubmitBtn).not.toBeDisabled();
+
+    await user.click(briefSubmitBtn);
+    expect(interviewApi.uploadJdInterview).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Interview session opened')).toBeInTheDocument();
+  });
+
+  it('renders English tab and button labels when I18nContext is English', async () => {
+    let store: Record<string, string> = { app_locale: 'en' };
+    Object.defineProperty(window, 'localStorage', {
+      value: {
+        getItem: (k: string) => store[k] || null,
+        setItem: (k: string, v: string) => {
+          store[k] = v;
+        },
+        clear: () => {
+          store = {};
+        },
+      },
+      writable: true,
+    });
+
+    const { I18nProvider } = await import('../../../locales/I18nContext');
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <I18nProvider defaultLocale="en">
+          <InterviewSetupForm />
+        </I18nProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Loading system configuration/i)).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: /Manual Customization/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Upload JD/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Start Interview Now/i })).toBeInTheDocument();
+  });
 });
+

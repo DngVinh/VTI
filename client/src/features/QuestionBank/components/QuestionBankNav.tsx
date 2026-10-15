@@ -1,12 +1,8 @@
 import { NavLink } from 'react-router-dom';
 
 const navItems = [
-  { to: '/admin/question-bank', label: 'Ngân hàng câu hỏi', end: true },
-  { to: '/admin/question-bank/reviews', label: 'Hàng đợi duyệt' },
-  { to: '/admin/question-bank/selection', label: 'Mô phỏng chọn câu' },
-  { to: '/admin/question-bank/analytics', label: 'Độ phủ & Thống kê' },
-  { to: '/admin/question-bank/import-export', label: 'Import / Export' },
-  { to: '/admin/question-bank/ai-assistant', label: 'AI Assistant' },
+  { to: '/admin/question-bank', label: 'Quản lý câu hỏi', end: true },
+  { to: '/admin/question-bank/questions/new', label: '＋ Tạo câu hỏi', end: true },
 ];
 
 export const QuestionBankNav = () => {

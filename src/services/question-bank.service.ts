@@ -5,6 +5,7 @@ import {
   createQuestionVersionEtag,
 } from '../domain/question-bank/etag';
 import { QuestionBankDomainError } from '../domain/question-bank/errors';
+import { getEnv } from '../config/env';
 import { createContentHash, normalizePromptFingerprint } from '../domain/question-bank/hashing';
 import {
   createIdempotencyFingerprint,
@@ -15,6 +16,7 @@ import {
   assertDraftMutable,
   assertFourEyes,
   assertQuestionComplete,
+  assertQuestionLibraryReady,
   assertRubricValid,
   validateQuestionCompleteness,
   normalizeTags,
@@ -777,7 +779,10 @@ export class QuestionBankService implements IQuestionBankService {
   ) {
     const initial = await this.requireVersion(questionId, versionNumber);
     this.assertPreconditionResource(precondition, initial.id);
-    assertFourEyes(context.actorId, initial.contributorIds, this.fourEyesEnabled());
+    const direct = input.direct === true;
+    if (!direct) {
+      assertFourEyes(context.actorId, initial.contributorIds, this.fourEyesEnabled());
+    }
     const claim = this.claimValues(context, { questionId, versionNumber, input, precondition });
     const replay = await this.replayVersion(claim);
     if (replay) return replay;
@@ -788,9 +793,13 @@ export class QuestionBankService implements IQuestionBankService {
         session
       );
       const current = await this.requireVersion(questionId, versionNumber, session);
-      assertQuestionComplete(current);
-      await this.assertStoredTaxonomyValid(current, session);
-      assertFourEyes(context.actorId, current.contributorIds, this.fourEyesEnabled());
+      if (direct) {
+        assertQuestionLibraryReady(current);
+      } else {
+        assertQuestionComplete(current);
+        await this.assertStoredTaxonomyValid(current, session);
+        assertFourEyes(context.actorId, current.contributorIds, this.fourEyesEnabled());
+      }
       const result = await this.workflow.publishVersion(
         {
           questionId,
@@ -799,6 +808,7 @@ export class QuestionBankService implements IQuestionBankService {
           actorId: context.actorId,
           reason: input.reason ?? null,
           requestId: context.requestId ?? 'req_unknown',
+          allowDraft: direct,
         },
         session
       );
@@ -823,7 +833,12 @@ export class QuestionBankService implements IQuestionBankService {
         {
           aggregateId: questionId,
           eventType: 'QUESTION_PUBLISHED',
-          payload: this.workflowPayload(updated.version, context.actorId, 'APPROVED', 'PUBLISHED'),
+          payload: this.workflowPayload(
+            updated.version,
+            context.actorId,
+            direct ? 'DRAFT' : 'APPROVED',
+            'PUBLISHED'
+          ),
         },
         session
       );
@@ -996,8 +1011,7 @@ export class QuestionBankService implements IQuestionBankService {
   }
 
   private fourEyesEnabled(): boolean {
-    const value = process.env.QUESTION_BANK_REVIEW_FOUR_EYES?.trim().toLowerCase();
-    return value !== 'false' && value !== '0';
+    return getEnv().QUESTION_BANK_REVIEW_FOUR_EYES;
   }
 
   private allowedReviewActions(
@@ -1950,8 +1964,8 @@ export class QuestionBankService implements IQuestionBankService {
     context: QuestionBankCommandContext
   ): Promise<QuestionEmbeddingBackfillResult> {
     const batchSize = Math.min(input.batchSize || 20, 50);
-    const providerName = process.env.QUESTION_BANK_AI_PROVIDER || 'gemini';
-    const modelName = process.env.QUESTION_BANK_EMBEDDING_MODEL || 'text-embedding-004';
+    const providerName = getEnv().QUESTION_BANK_AI_PROVIDER;
+    const modelName = getEnv().QUESTION_BANK_EMBEDDING_MODEL;
 
     const query: any = {
       lifecycleStatus: 'ACTIVE',
@@ -2043,8 +2057,8 @@ export class QuestionBankService implements IQuestionBankService {
     input: SemanticDuplicateInput,
     requestId: string
   ): Promise<QuestionDuplicateDetectionResult> {
-    const providerName = process.env.QUESTION_BANK_AI_PROVIDER || 'gemini';
-    const modelName = process.env.QUESTION_BANK_EMBEDDING_MODEL || 'text-embedding-004';
+    const providerName = getEnv().QUESTION_BANK_AI_PROVIDER;
+    const modelName = getEnv().QUESTION_BANK_EMBEDDING_MODEL;
     const threshold = input.threshold ?? 0.75;
     const topK = Math.min(input.topK ?? 10, 20);
 

@@ -99,7 +99,7 @@ describe('SEC-03 ownership, async boundary and disposable retention', () => {
   });
   it('stores only minimized extracted text and releases original buffer on success/failure', async () => {
     const owner=await user(); const service=new InterviewService(repo,mock);
-    const buffer=docx('Build APIs\nEmail: private.person@example.invalid');
+    const buffer=docx('Hiring Senior Backend Developer. Responsibilities: Build APIs and microservices. Requirements: 3+ years experience with Node.js and TypeScript. Benefits: Competitive salary. Email: private.person@example.invalid');
     const session=await service.createInterviewSessionFromJD(validSetup(),buffer,'application/vnd.openxmlformats-officedocument.wordprocessingml.document',owner.id);
     expect(buffer.every(byte=>byte===0)).toBe(true);
     expect(session.setupData.jdText).not.toContain('private.person@example.invalid');

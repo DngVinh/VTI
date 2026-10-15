@@ -13,6 +13,7 @@ import {
   CreatePromptInput,
   ISystemPromptService
 } from './interfaces/ISystemPromptService';
+import { logger } from '../infrastructure/logging/logger';
 
 import {
   CreateSystemPromptInput,
@@ -183,10 +184,7 @@ export class SystemPromptService
             version: prompt.version
           });
         } catch (auditError) {
-          console.error(
-            'Failed to write publish failure audit:',
-            auditError
-          );
+          logger.error('audit.unavailable');
         }
       }
 
@@ -303,10 +301,7 @@ export class SystemPromptService
             version: target.version
           });
         } catch (auditError) {
-          console.error(
-            'Failed to write rollback failure audit:',
-            auditError
-          );
+          logger.error('audit.unavailable');
         }
       }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { QuestionBankNav } from '../components/QuestionBankNav';
 import { questionBankApi, createIdempotencyKey } from '../api/questionBankApi';
+import { AppShell } from '../../../layouts/AppShell';
 import type { QuestionImportResult, QuestionExportResult, ExportFilterInput, QuestionImportInput, VersionStatus, Difficulty } from '../types';
 
 export const QuestionImportExportPage = () => {
@@ -89,8 +90,9 @@ export const QuestionImportExportPage = () => {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
-      <div className="mx-auto max-w-7xl">
+    <AppShell>
+      <main className="px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-7xl">
         <header className="mb-6">
           <p className="text-sm font-bold uppercase tracking-widest text-indigo-700">Admin · Question Bank</p>
           <h1 className="mt-1 text-3xl font-extrabold text-slate-950">Nhập & Xuất dữ liệu (Import / Export)</h1>
@@ -343,5 +345,6 @@ export const QuestionImportExportPage = () => {
         )}
       </div>
     </main>
-  );
+  </AppShell>
+);
 };

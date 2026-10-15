@@ -33,9 +33,9 @@ describe('route policy', () => {
     useAuthStore.setState({ user: null, bootstrapStatus: 'ready' });
   });
 
-  it('uses the Candidate/Interviewer and Admin landing policy', () => {
-    expect(roleLanding('CANDIDATE')).toBe('/setup');
-    expect(roleLanding('INTERVIEWER')).toBe('/setup');
+  it('uses the home landing policy for all roles', () => {
+    expect(roleLanding('CANDIDATE')).toBe('/');
+    expect(roleLanding('INTERVIEWER')).toBe('/');
     expect(roleLanding('ADMIN')).toBe('/');
   });
 

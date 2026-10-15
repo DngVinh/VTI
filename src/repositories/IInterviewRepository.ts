@@ -1,5 +1,4 @@
-import { InterviewStatus } from '../domain/interview/IInterviewState';
-import { InterviewSetupPayload, LocalizedContent } from '../domain/interview/types';
+import { InterviewStatus, InterviewSetupPayload, LocalizedContent } from '../domain/interview/types';
 
 export interface InterviewPromptVersion {
   promptId: string;
@@ -41,13 +40,26 @@ export interface InterviewEntity {
   safeErrorCode?: string | null;
   setupData: InterviewSetupPayload;
   questions?: InterviewQuestionEntity[];
-  dimensions?: { name: string; score: number; reasoning: string }[] | null;
+  dimensions?: { name: string; score: number; reasoning: string | LocalizedContent }[] | null;
   overallScore?: number | null;
   learningPath?: {
     topic: LocalizedContent;
     priority: string;
     suggestion: LocalizedContent;
   }[] | null;
+  personaEvaluations?: Array<{
+    role: 'TECH_LEAD' | 'BAR_RAISER' | 'BEHAVIORAL' | 'JUDGE';
+    score: number;
+    strengths: Array<{ en: string; vi: string }>;
+    weaknesses: Array<{ en: string; vi: string }>;
+    specificFeedback: { en: string; vi: string };
+    dimensionScores?: Record<string, number>;
+  }>;
+  varianceFlags?: Array<{
+    dimension: string;
+    variance: number;
+    arbiterResolution: { en: string; vi: string };
+  }>;
   promptVersions?: {
     generation?: InterviewPromptVersion;
     evaluation?: InterviewPromptVersion;

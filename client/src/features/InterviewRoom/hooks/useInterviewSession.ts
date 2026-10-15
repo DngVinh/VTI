@@ -145,7 +145,10 @@ export const useInterviewSession = (sessionId: string) => {
 
   // Handle SSE state changes
   useEffect(() => {
-    if (sseStatus && sseVersion !== null && session && sseVersion > session.version) {
+    if (!sseStatus || !session) return;
+    const isNewStatus = session.status !== sseStatus;
+    const isNewVersion = sseVersion !== null && typeof session.version === 'number' && sseVersion > session.version;
+    if (isNewStatus || isNewVersion) {
       if (sseStatus === 'IN_PROGRESS' || sseStatus === 'COMPLETED' || sseStatus === 'FAILED') {
         // Avoid calling setState synchronously within an effect body
         setTimeout(() => fetchSession(), 0);

@@ -15,3 +15,4 @@ logs/
 deploy.tar.gz
 *.log
 .DS_Store
+uploads/

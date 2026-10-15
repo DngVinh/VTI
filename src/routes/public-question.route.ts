@@ -12,9 +12,11 @@ const controller = container.resolve(PublicQuestionController);
 
 // Primary endpoints according to spec
 router.get('/public', validate(listPublicQuestionsSchema), controller.listPublicQuestions);
+router.get('/public/taxonomy', controller.getPublicTaxonomy);
 router.get('/public/:id', validate(getPublicQuestionDetailSchema), controller.getPublicQuestionDetail);
 
 // Convenience aliases for /api/v1/questions and /api/v1/questions/:id
+router.get('/taxonomy', controller.getPublicTaxonomy);
 router.get('/', validate(listPublicQuestionsSchema), controller.listPublicQuestions);
 router.get('/:id', validate(getPublicQuestionDetailSchema), controller.getPublicQuestionDetail);
 

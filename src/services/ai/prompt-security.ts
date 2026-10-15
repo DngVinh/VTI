@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../../utils/AppError';
 import { AnswerPayload, IAiProvider, InterviewSetupPayload } from '../../domain/interview/types';
+import { logger } from '../../infrastructure/logging/logger';
 
 export const PROMPT_VERSION = 'SEC03-v1';
 export const INPUT_LIMITS = Object.freeze({ document: 10000, answer: 5000, question: 2000, output: 80000 });
@@ -24,12 +25,17 @@ export const DIMENSIONS = [
   'PROBLEM_SOLVING',
   'COMMUNICATION',
   'PRACTICAL_APPLICATION',
+  'Technical Depth',
+  'Problem Solving',
+  'System Design & Best Practices',
+  'Communication',
+  'Practical Experience',
 ] as const;
 export const EVALUATION_SYSTEM = `${boundary}
 Evaluate all five supplied questions. Empty answers score zero. Scores are integers 0-10.
 Return {evaluations, overallScore, dimensions, learningPath}.
 evaluations: exactly one {questionId, feedback:{en,vi}, score} per input questionId.
-dimensions: exactly four {name, score, reasoning}, names: ${DIMENSIONS.join('; ')}.
+dimensions: exactly four {name, score, reasoning:{en,vi}}, names: ${DIMENSIONS.join('; ')}.
 learningPath: at most 10 {topic:{en,vi}, priority:"High"|"Medium"|"Low", suggestion:{en,vi}}.
 Translations/reasoning are 1-2000 characters; topic translations 1-200 characters.
 overallScore is an integer 0-10; the backend recomputes it from per-question scores.
@@ -71,10 +77,10 @@ export function generationPrompt(setup: InterviewSetupPayload) {
 }
 export interface EvaluationQuestion { id: string; content: { en: string; vi: string } }
 export function evaluationPrompt(questions: EvaluationQuestion[], answers: AnswerPayload[]) {
-  if (questions.length !== 5 || new Set(questions.map(q => q.id)).size !== 5 ||
+  if (questions.length < 1 || questions.length > 5 || new Set(questions.map(q => q.id)).size !== questions.length ||
       questions.some(q => !/^[a-f0-9]{24}$/i.test(q.id))) throw inputError();
   const ids = new Set(questions.map(q => q.id));
-  if (answers.length > 5 || new Set(answers.map(a => a.questionId)).size !== answers.length ||
+  if (answers.length > questions.length || new Set(answers.map(a => a.questionId)).size !== answers.length ||
       answers.some(a => !ids.has(a.questionId))) throw inputError();
   const safeQuestions = questions.map(q => ({ id: q.id, content: {
     en: textInput(q.content.en, INPUT_LIMITS.question), vi: textInput(q.content.vi, INPUT_LIMITS.question),
@@ -94,16 +100,17 @@ const questionSchema = z.object({ order: z.number().int().min(1).max(5), difficu
 export const generationSchema = z.array(questionSchema).length(5)
   .refine(q => new Set(q.map(v => v.order)).size === 5)
   .refine(q => new Set(q.map(v => v.content.en.toLowerCase())).size === 5 && new Set(q.map(v => v.content.vi.toLowerCase())).size === 5);
-const evaluationSchema = z.object({
-  evaluations: z.array(z.object({ questionId: z.string().regex(/^[a-f0-9]{24}$/i), feedback: localized(2000), score }).strict()).length(5),
+export const createEvaluationSchema = (expectedLength: number) => z.object({
+  evaluations: z.array(z.object({ questionId: z.string().regex(/^[a-f0-9]{24}$/i), feedback: localized(2000), score }).strict()).length(expectedLength),
   overallScore: score,
-  dimensions: z.array(z.object({ name: z.enum(DIMENSIONS), score, reasoning: safeText(2000) }).strict()).length(4)
-    .refine(d => new Set(d.map(v => v.name)).size === 4),
+  dimensions: z.array(z.object({ name: z.enum(DIMENSIONS), score, reasoning: z.union([safeText(2000), localized(2000)]) }).strict()).min(4).max(5)
+    .refine(d => new Set(d.map(v => v.name)).size === d.length),
   learningPath: z.array(z.object({ topic: localized(200), priority: z.enum(['High', 'Medium', 'Low']), suggestion: localized(2000) }).strict()).max(10).optional().default([]),
 }).strict();
+export const evaluationSchema = createEvaluationSchema(5);
 export function parseProviderJson(value: string): unknown {
   if (typeof value !== 'string' || value.length > INPUT_LIMITS.output) {
-    console.error('Invalid provider JSON length or type:', typeof value);
+    logger.error('ai.provider_failed');
     throw outputError();
   }
   
@@ -113,38 +120,37 @@ export function parseProviderJson(value: string): unknown {
   }
 
   try { return JSON.parse(cleanedValue); } catch (e) {
-    console.error('Failed to parse provider JSON:', cleanedValue);
+    logger.error('ai.provider_failed');
     throw outputError();
   }
 }
 export function validateGeneration(value: unknown) {
   const result = generationSchema.safeParse(value);
   if (!result.success) {
-    console.error('Generation validation failed:', result.error.format());
-    console.error('Raw AI output:', JSON.stringify(value, null, 2));
+    logger.error('ai.provider_failed');
     throw outputError();
   }
   return result.data.sort((a,b) => a.order - b.order);
 }
 export function validateEvaluation(value: unknown, questions: EvaluationQuestion[], answers: AnswerPayload[]) {
-  const result = evaluationSchema.safeParse(value);
+  const schema = createEvaluationSchema(questions.length);
+  const result = schema.safeParse(value);
   const expected = new Set(questions.map(q => q.id));
-  if (!result.success || expected.size !== 5) {
+  if (!result.success || expected.size !== questions.length) {
     if (!result.success) {
-      console.error('Evaluation validation failed:', result.error.format());
-      console.error('Raw AI Output:', JSON.stringify(value, null, 2));
+      logger.error('ai.provider_failed');
     }
     throw outputError();
   }
   const data = result.data;
-  if (new Set(data.evaluations.map(e => e.questionId)).size !== 5 || data.evaluations.some(e => !expected.has(e.questionId))) {
-     console.error('Question IDs mismatch in evaluation');
+  if (new Set(data.evaluations.map(e => e.questionId)).size !== questions.length || data.evaluations.some(e => !expected.has(e.questionId))) {
+     logger.error('ai.provider_failed');
      throw outputError();
   }
   for (const evaluation of data.evaluations) {
     if (!answers.find(a => a.questionId === evaluation.questionId)?.candidateAnswer.trim()) evaluation.score = 0;
   }
-  data.overallScore = Math.round(data.evaluations.reduce((sum,e) => sum + e.score, 0) / 5);
+  data.overallScore = Math.round(data.evaluations.reduce((sum,e) => sum + e.score, 0) / (data.evaluations.length || 1));
   return data;
 }
 export function validateUsage(value: unknown) {

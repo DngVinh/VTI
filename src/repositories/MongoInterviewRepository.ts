@@ -958,6 +958,8 @@ export class MongoInterviewRepository
       overallScore: doc.overallScore,
       dimensions: doc.dimensions,
       learningPath: doc.learningPath,
+      personaEvaluations: doc.personaEvaluations,
+      varianceFlags: doc.varianceFlags,
       promptVersions: doc.promptVersions,
       metadata: doc.metadata,
       createdAt: doc.createdAt,

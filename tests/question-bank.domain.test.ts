@@ -20,6 +20,7 @@ import {
   assertDraftMutable,
   assertFourEyes,
   assertQuestionComplete,
+  assertQuestionLibraryReady,
   assertRubricValid,
   assertVersionTransitionAllowed,
   isKebabCase,
@@ -252,6 +253,30 @@ describe('Question Bank domain foundation', () => {
       complete.contributorIds,
       false
     )).not.toThrow();
+  });
+
+  it('supports the simplified Admin QB library-readiness gate', () => {
+    const quick = createEmptyQuestionVersionDraft();
+    quick.prompt.vi = 'Event loop là gì?';
+    quick.questionType = 'TECHNICAL';
+    quick.difficulty = 'MEDIUM';
+    quick.referenceAnswer.vi = 'Cơ chế điều phối tác vụ bất đồng bộ.';
+    quick.explanation.vi = 'Giải thích cơ chế điều phối tác vụ bất đồng bộ.';
+    quick.learningObjective.vi = 'Đánh giá khả năng hiểu event loop.';
+    quick.rubric = [1, 2].map((index) => ({
+      key: `criterion-${index}`,
+      title: { vi: `Tiêu chí ${index}`, en: null },
+      description: { vi: `Mô tả ${index}`, en: null },
+      weight: 50,
+      levels: [0, 1, 2, 3, 4].map((score) => ({
+        score,
+        description: { vi: `Mức ${score}`, en: null },
+      })),
+    }));
+
+    expect(() => assertQuestionLibraryReady(quick)).not.toThrow();
+    quick.referenceAnswer.vi = null;
+    expect(() => assertQuestionLibraryReady(quick)).toThrow(/đưa vào thư viện/i);
   });
 
   it('uses explicit DTO allowlists and does not disclose restricted list fields', () => {

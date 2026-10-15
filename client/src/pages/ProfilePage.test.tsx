@@ -2,12 +2,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import { getProfile, updateProfile } from '../auth/apiClient';
+import { getProfile, updateProfile, uploadAvatar } from '../auth/apiClient';
 import { useAuthStore } from '../auth/authStore';
 import type { User } from '../auth/types';
 import { ProfilePage } from './ProfilePage';
 
-vi.mock('../auth/apiClient', () => ({ getProfile: vi.fn(), logout: vi.fn(), updateProfile: vi.fn() }));
+vi.mock('../auth/apiClient', () => ({
+  getProfile: vi.fn(),
+  logout: vi.fn(),
+  updateProfile: vi.fn(),
+  uploadAvatar: vi.fn(),
+}));
+
 
 const profile: User = {
   id: 'user-1',
@@ -117,4 +123,55 @@ describe('ProfilePage', () => {
     fireEvent.error(await screen.findByRole('img', { name: 'Ảnh đại diện của Alice Smith' }));
     expect(await screen.findByTestId('avatar-fallback')).toHaveTextContent('AS');
   });
+
+  it('handles avatar file upload successfully', async () => {
+    vi.mocked(getProfile).mockResolvedValue(profile);
+    vi.mocked(uploadAvatar).mockResolvedValue({
+      avatarUrl: '/uploads/avatars/new-avatar.png',
+      user: { ...profile, avatarUrl: '/uploads/avatars/new-avatar.png' },
+    });
+    renderPage();
+
+    await screen.findByLabelText('Họ và tên');
+    const fileInput = screen.getByLabelText('Chọn tệp ảnh đại diện');
+    const file = new File(['dummy content'], 'avatar.png', { type: 'image/png' });
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(uploadAvatar).toHaveBeenCalledWith(file));
+    expect(await screen.findByText('Cập nhật hồ sơ thành công')).toBeInTheDocument();
+    expect(useAuthStore.getState().user?.avatarUrl).toBe('/uploads/avatars/new-avatar.png');
+  });
+
+  it('allows saving profile when avatarUrl is a relative /uploads/ path', async () => {
+    const user = userEvent.setup();
+    const profileWithUploadedAvatar = {
+      ...profile,
+      avatarUrl: '/uploads/avatars/avatar-6aadef0d9295dbf9d50889b3-1789786076652.jpg',
+    };
+    vi.mocked(getProfile).mockResolvedValue(profileWithUploadedAvatar);
+    vi.mocked(updateProfile).mockResolvedValue({
+      ...profileWithUploadedAvatar,
+      fullName: 'Updated With Avatar',
+    });
+    renderPage();
+
+    const name = await screen.findByLabelText('Họ và tên');
+    await user.clear(name);
+    await user.type(name, 'Updated With Avatar');
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() =>
+      expect(updateProfile).toHaveBeenCalledWith({
+        fullName: 'Updated With Avatar',
+        avatarUrl: '/uploads/avatars/avatar-6aadef0d9295dbf9d50889b3-1789786076652.jpg',
+        currentLevel: 'MIDDLE',
+        githubUrl: 'https://github.com/candidate',
+        linkedinUrl: 'https://linkedin.com/in/candidate',
+        bio: null,
+      })
+    );
+    expect(await screen.findByText('Cập nhật hồ sơ thành công')).toBeInTheDocument();
+  });
 });
+

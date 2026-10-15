@@ -30,12 +30,26 @@ export interface IInterviewSessionDocument
   setupData: InterviewSetupPayload;
 
   overallScore: number | null;
-  dimensions: { name: string; score: number; reasoning: string }[] | null;
+  dimensions: { name: string; score: number; reasoning: string | { vi: string; en: string } }[] | null;
   learningPath: { 
     topic: { en: string; vi: string }; 
     priority: string; 
     suggestion: { en: string; vi: string } 
   }[] | null;
+
+  personaEvaluations?: Array<{
+    role: 'TECH_LEAD' | 'BAR_RAISER' | 'BEHAVIORAL' | 'JUDGE';
+    score: number;
+    strengths: Array<{ en: string; vi: string }>;
+    weaknesses: Array<{ en: string; vi: string }>;
+    specificFeedback: { en: string; vi: string };
+    dimensionScores?: Record<string, number>;
+  }>;
+  varianceFlags?: Array<{
+    dimension: string;
+    variance: number;
+    arbiterResolution: { en: string; vi: string };
+  }>;
 
   promptVersions?: {
     generation?: InterviewPromptVersion;
@@ -64,7 +78,7 @@ const InterviewSessionSchema = new Schema<IInterviewSessionDocument>(
     },
     status: {
       type: String,
-      enum: ['PENDING', 'GENERATING', 'IN_PROGRESS', 'EVALUATING', 'COMPLETED', 'FAILED'],
+      enum: ['PENDING', 'GENERATING', 'IN_PROGRESS', 'FOLLOW_UP', 'EVALUATING', 'COMPLETED', 'FAILED'],
       default: 'PENDING',
       required: true
     },
@@ -81,6 +95,7 @@ const InterviewSessionSchema = new Schema<IInterviewSessionDocument>(
       terminalAt: { type: Date, default: null },
       contentPurgeAt: { type: Date, default: null },
       recordPurgeAt: { type: Date, default: null },
+      contentPurgedAt: { type: Date },
     setupData: {
       jobPosition: { type: String },
       level: { type: String },
@@ -95,9 +110,9 @@ const InterviewSessionSchema = new Schema<IInterviewSessionDocument>(
       default: null
     },
     dimensions: [{
-      name: { type: String },
-      score: { type: Number },
-      reasoning: { type: String }
+      name: { type: String, required: true },
+      score: { type: Number, min: 0, max: 10, required: true },
+      reasoning: { type: Schema.Types.Mixed, required: true }
     }],
     learningPath: [{
       topic: { 
@@ -110,6 +125,8 @@ const InterviewSessionSchema = new Schema<IInterviewSessionDocument>(
         vi: { type: String }
       }
     }],
+    personaEvaluations: { type: Schema.Types.Mixed, default: undefined },
+    varianceFlags: { type: Schema.Types.Mixed, default: undefined },
     promptVersions: {
       generation: {
         promptId: { type: String },
@@ -142,6 +159,12 @@ InterviewSessionSchema.index({ status: 1, contentPurgeAt: 1, _id: 1 });
 InterviewSessionSchema.index({ status: 1, recordPurgeAt: 1, _id: 1 });
 InterviewSessionSchema.index({
   userId: 1,
+  createdAt: -1,
+  _id: -1
+});
+InterviewSessionSchema.index({
+  userId: 1,
+  status: 1,
   createdAt: -1,
   _id: -1
 });

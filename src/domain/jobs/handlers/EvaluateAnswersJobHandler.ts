@@ -1,5 +1,5 @@
 import { IJobHandler } from '../IJobHandler';
-import { inject, injectable } from 'tsyringe';
+import { container, inject, injectable } from 'tsyringe';
 import { InterviewOperationProcessor } from '../../../services/InterviewOperationProcessor';
 import { IAiProvider } from '../../interview/types';
 import { IInterviewRepository } from '../../../repositories/IInterviewRepository';
@@ -26,6 +26,16 @@ export class EvaluateAnswersJobHandler implements IJobHandler<EvaluateAnswersDat
     private readonly eventPublisher?: IEventPublisher,
   ) {}
 
+  private resolveProvider(): IAiProvider {
+    if (
+      this.processorOrProvider &&
+      typeof (this.processorOrProvider as any).evaluateAnswers === 'function'
+    ) {
+      return this.processorOrProvider as IAiProvider;
+    }
+    return container.resolve<IAiProvider>('IAiProvider');
+  }
+
   async handle(input: EvaluateAnswersData): Promise<void> {
     if ('operationId' in input) {
       const normalized = operationJobData(input);
@@ -36,10 +46,11 @@ export class EvaluateAnswersJobHandler implements IJobHandler<EvaluateAnswersDat
       return;
     }
 
-    const provider = this.processorOrProvider as IAiProvider;
-    if (!this.repository) throw new Error('Interview repository is not configured');
+    const provider = this.resolveProvider();
+    const repo = this.repository ?? container.resolve<IInterviewRepository>('IInterviewRepository');
+    if (!repo) throw new Error('Interview repository is not configured');
     const data = interviewJobData(input);
-    const repository = this.repository.forOwner(data.ownerId);
+    const repository = repo.forOwner(data.ownerId);
     logger.info('job.started', {
       jobName: this.name,
       resourceType: 'interview',
@@ -83,11 +94,12 @@ export class EvaluateAnswersJobHandler implements IJobHandler<EvaluateAnswersDat
       });
       await repository.updateTokenUsage(data.interviewId, audit);
 
+      const publisher = this.eventPublisher ?? container.resolve<IEventPublisher>('IEventPublisher');
       const context = new InterviewContext(
         data.interviewId,
         repository,
         InterviewContext.createStateFromStatus(session.status),
-        this.eventPublisher,
+        publisher,
         session.version,
       );
       const { CompletedState } = await import('../../interview/states/CompletedState');
@@ -103,11 +115,12 @@ export class EvaluateAnswersJobHandler implements IJobHandler<EvaluateAnswersDat
         resourceType: 'interview',
         resourceId: data.interviewId,
       });
+      const publisher = this.eventPublisher ?? container.resolve<IEventPublisher>('IEventPublisher');
       const context = new InterviewContext(
         data.interviewId,
         repository,
         InterviewContext.createStateFromStatus(session.status),
-        this.eventPublisher,
+        publisher,
         session.version,
       );
       const { FailedState } = await import('../../interview/states/FailedState');

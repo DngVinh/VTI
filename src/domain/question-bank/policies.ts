@@ -263,6 +263,72 @@ export const assertQuestionComplete = (version: QuestionVersionDraftFields): voi
   }
 };
 
+export const validateQuestionLibraryReadiness = (
+  version: QuestionVersionDraftFields
+): DomainValidationIssue[] => {
+  const issues: DomainValidationIssue[] = [];
+  if (!hasLocalizedText(version.prompt)) {
+    issues.push({ field: 'content.prompt', message: 'Cần ít nhất một prompt VI hoặc EN' });
+  }
+  if (!version.questionType) {
+    issues.push({ field: 'classification.type', message: 'Loại câu hỏi là bắt buộc' });
+  }
+  if (!version.difficulty) {
+    issues.push({ field: 'classification.difficulty', message: 'Độ khó là bắt buộc' });
+  }
+  if (hasText(version.prompt.vi) && !hasText(version.referenceAnswer.vi)) {
+    issues.push({ field: 'answer.referenceAnswer.vi', message: 'Đáp án tham khảo VI là bắt buộc' });
+  }
+  if (hasText(version.prompt.en) && !hasText(version.referenceAnswer.en)) {
+    issues.push({ field: 'answer.referenceAnswer.en', message: 'Đáp án tham khảo EN là bắt buộc' });
+  }
+  if (hasText(version.prompt.vi) && !hasText(version.explanation.vi)) {
+    issues.push({ field: 'content.explanation.vi', message: 'Giải thích VI là bắt buộc cho prompt VI' });
+  }
+  if (hasText(version.prompt.en) && !hasText(version.explanation.en)) {
+    issues.push({ field: 'content.explanation.en', message: 'Giải thích EN là bắt buộc cho prompt EN' });
+  }
+  if (hasText(version.prompt.vi) && !hasText(version.learningObjective.vi)) {
+    issues.push({ field: 'answer.learningObjective.vi', message: 'Mục tiêu đánh giá VI là bắt buộc cho prompt VI' });
+  }
+  if (hasText(version.prompt.en) && !hasText(version.learningObjective.en)) {
+    issues.push({ field: 'answer.learningObjective.en', message: 'Mục tiêu đánh giá EN là bắt buộc cho prompt EN' });
+  }
+  if (version.rubric.length < 2) {
+    issues.push({ field: 'rubric', message: 'Rubric chuẩn phải có ít nhất 2 tiêu chí' });
+  }
+  issues.push(...validateRubric(version.rubric));
+  version.rubric.forEach((criterion, criterionIndex) => {
+    if (!hasLocalizedText(criterion.title)) {
+      issues.push({ field: `rubric.${criterionIndex}.title`, message: 'Tiêu đề rubric là bắt buộc' });
+    }
+    const scores = new Set(criterion.levels.map((level) => level.score));
+    if (criterion.levels.length !== 5 || ([0, 1, 2, 3, 4] as const).some((score) => !scores.has(score))) {
+      issues.push({ field: `rubric.${criterionIndex}.levels`, message: 'Rubric chuẩn phải có đủ 5 mức điểm từ 0 đến 4' });
+    }
+    criterion.levels.forEach((level, levelIndex) => {
+      if (!hasLocalizedText(level.description)) {
+        issues.push({
+          field: `rubric.${criterionIndex}.levels.${levelIndex}`,
+          message: 'Mô tả mức rubric là bắt buộc',
+        });
+      }
+    });
+  });
+  return issues;
+};
+
+export const assertQuestionLibraryReady = (version: QuestionVersionDraftFields): void => {
+  const issues = validateQuestionLibraryReadiness(version);
+  if (issues.length) {
+    throw new QuestionBankDomainError(
+      'QUESTION_CONTENT_INCOMPLETE',
+      'Câu hỏi cần có nội dung, giải thích, mục tiêu đánh giá và rubric chuẩn trước khi đưa vào thư viện',
+      issues
+    );
+  }
+};
+
 export const assertFourEyes = (
   actorId: string,
   contributorIds: readonly string[],

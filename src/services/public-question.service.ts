@@ -11,6 +11,7 @@ import {
   PublicQuestionDetailDto,
   PublicQuestionFilterQuery,
   PublicQuestionSummaryDto,
+  PublicTaxonomyDto,
 } from './interfaces/IPublicQuestionService';
 
 @injectable()
@@ -239,6 +240,37 @@ export class PublicQuestionService implements IPublicQuestionService {
       tags: version.tags || [],
       estimatedTimeSeconds: version.estimatedTimeSeconds ?? null,
       updatedAt: new Date(version.updatedAt || question.updatedAt || Date.now()).toISOString(),
+    };
+  }
+
+  async getPublicTaxonomy(roleId?: string): Promise<PublicTaxonomyDto> {
+    const techFilter: Record<string, any> = { status: 'ACTIVE' };
+    if (roleId && Types.ObjectId.isValid(roleId)) {
+      techFilter.roles = new Types.ObjectId(roleId);
+    }
+
+    const [roles, levels, techs] = await Promise.all([
+      Role.find({ status: 'ACTIVE' }).sort({ name: 1 }).lean().exec(),
+      Level.find({ status: 'ACTIVE' }).sort({ rank: 1, name: 1 }).lean().exec(),
+      Technology.find(techFilter).sort({ name: 1 }).lean().exec(),
+    ]);
+
+    return {
+      roles: roles.map((r: any) => ({
+        id: r._id.toString(),
+        name: r.name,
+        code: r.code,
+      })),
+      levels: levels.map((l: any) => ({
+        id: l._id.toString(),
+        name: l.name,
+        code: l.code,
+      })),
+      technologies: techs.map((t: any) => ({
+        id: t._id.toString(),
+        name: t.name,
+        code: t.code,
+      })),
     };
   }
 }

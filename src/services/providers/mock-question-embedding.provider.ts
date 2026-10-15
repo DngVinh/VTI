@@ -6,6 +6,7 @@ import {
   QuestionEmbeddingOutput,
   QuestionEmbeddingPayload,
 } from '../interfaces/IQuestionEmbeddingProvider';
+import { getEnv } from '../../config/env';
 
 export type MockEmbeddingScenario =
   | 'SUCCESS'
@@ -20,12 +21,9 @@ export class MockQuestionEmbeddingProvider implements IQuestionEmbeddingProvider
   private dimensions: number = 768;
 
   constructor() {
-    const rawDim = process.env.QUESTION_BANK_EMBEDDING_DIMENSIONS;
-    if (rawDim) {
-      const parsed = parseInt(rawDim, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        this.dimensions = parsed;
-      }
+    const rawDim = getEnv().QUESTION_BANK_EMBEDDING_DIMENSIONS;
+    if (rawDim && rawDim > 0) {
+      this.dimensions = rawDim;
     }
   }
 

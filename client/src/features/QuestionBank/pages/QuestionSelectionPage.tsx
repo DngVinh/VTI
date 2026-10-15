@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { QuestionBankNav } from '../components/QuestionBankNav';
 import { questionBankApi } from '../api/questionBankApi';
+import { AppShell } from '../../../layouts/AppShell';
 import type { QuestionSelectionResult, Difficulty, QuestionType } from '../types';
 import { enumLabel } from '../components/enumLabels';
 
@@ -35,8 +36,9 @@ export const QuestionSelectionPage = () => {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
-      <div className="mx-auto max-w-7xl">
+    <AppShell>
+      <main className="px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-7xl">
         <header className="mb-6">
           <p className="text-sm font-bold uppercase tracking-widest text-indigo-700">Admin · Question Bank</p>
           <h1 className="mt-1 text-3xl font-extrabold text-slate-950">Mô phỏng tuyển chọn câu hỏi</h1>
@@ -201,5 +203,6 @@ export const QuestionSelectionPage = () => {
         )}
       </div>
     </main>
-  );
+  </AppShell>
+);
 };

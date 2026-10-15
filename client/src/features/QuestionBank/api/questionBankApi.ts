@@ -2,6 +2,7 @@ import { request, requestWithMetadata } from '../../../auth/apiClient';
 import type {
   Pagination,
   QuestionAdminDetailDto,
+  QuestionSummaryDto,
   QuestionListQuery,
   QuestionListResponse,
   QuestionVersionAdminDetailDto,
@@ -45,6 +46,10 @@ export const createVersionEtag = (version: QuestionVersionAdminDetailDto): strin
 
 export const createQuestionEtag = (question: QuestionAdminDetailDto['question']): string =>
   `W/"question:${question.id}:${question.revision}"`;
+
+export const createQuestionSummaryEtag = (
+  question: Pick<QuestionSummaryDto, 'id' | 'revision'>
+): string => `W/"question:${question.id}:${question.revision}"`;
 
 export const questionBankApi = {
   listQuestions: (
@@ -164,13 +169,17 @@ export const questionBankApi = {
     versionNumber: number,
     etag: string,
     idempotencyKey: string,
-    reason?: string
+    reason?: string,
+    direct = false
   ) => requestWithMetadata<QuestionVersionAdminDetailDto>(
     `${BASE_PATH}/${questionId}/versions/${versionNumber}/publish`,
     {
       method: 'POST',
       headers: { 'If-Match': etag, 'Idempotency-Key': idempotencyKey },
-      body: JSON.stringify(reason ? { reason } : {}),
+      body: JSON.stringify({
+        ...(reason ? { reason } : {}),
+        ...(direct ? { direct: true } : {}),
+      }),
     }
   ),
 

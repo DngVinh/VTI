@@ -1,0 +1,512 @@
+openapi: 3.1.0
+info:
+  title: VTI AI Interview System — High-Tech AI Upgrade API Specification
+  version: 2.0.0
+  description: |
+    API Contract for AI Interview Upgrade (AIU) phases:
+    - Phase 1: Adaptive Socratic Follow-up
+    - Phase 2: Multi-Agent Evaluation & Persona Consensus
+    - Phase 3: Isolated Code Execution Sandbox & AST
+    - Phase 4: System Design Interactive Whiteboard & Gemini Vision
+    - Phase 5: Gemini Multimodal Live Audio Stream (WebRTC / WS)
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local Development Server
+  - url: https://api.interview.vti.com.vn/api/v1
+    description: Production Server
+
+paths:
+  /interviews/{id}/follow-up:
+    post:
+      summary: Submit candidate answer for turn-by-turn Socratic follow-up
+      description: |
+        Processes candidate answer for current question, analyzes knowledge gaps,
+        and optionally returns a targeted Vietnamese-first follow-up question.
+      operationId: requestFollowUp
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F\d]{24}$'
+          description: Interview Session MongoDB ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FollowUpRequest'
+      responses:
+        '200':
+          description: Follow-up decision and generated question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpResponse'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+        '409':
+          $ref: '#/components/responses/409StateConflict'
+        '429':
+          $ref: '#/components/responses/429RateLimited'
+        '502':
+          $ref: '#/components/responses/502BadGateway'
+
+  /interviews/{id}/conversation:
+    get:
+      summary: Get full conversation turns history for an interview session
+      description: Retrieves all dialogue turns between AI interviewer and candidate.
+      operationId: getConversationHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F\d]{24}$'
+        - name: questionId
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[a-fA-F\d]{24}$'
+          description: Optional filter by specific question ObjectId
+      responses:
+        '200':
+          description: Ordered array of conversation turns
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationTurnItem'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+
+  /interviews/{id}/execute-code:
+    post:
+      summary: Execute candidate code in isolated sandbox
+      description: Runs code against test cases with strict 5s timeout and 128MB limit.
+      operationId: executeCode
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F\d]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeExecutionRequest'
+      responses:
+        '200':
+          description: Code execution stdout, stderr, and test case evaluation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeExecutionResponse'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '408':
+          description: Execution Timed Out (> 5000ms)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Sandbox rate limit reached (max 10 executions/min)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /interviews/{id}/whiteboard:
+    post:
+      summary: Submit architecture diagram for Gemini Vision critique
+      description: Analyzes uploaded canvas image for SPOF, bottlenecks, and CAP trade-offs.
+      operationId: analyzeWhiteboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F\d]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhiteboardAnalysisRequest'
+      responses:
+        '200':
+          description: Visual critique with detected nodes, bounding boxes, and architectural feedback
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhiteboardAnalysisResponse'
+        '400':
+          $ref: '#/components/responses/400BadRequest'
+        '413':
+          description: Canvas image payload too large (> 3MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LocalizedText:
+      type: object
+      required:
+        - vi
+        - en
+      properties:
+        vi:
+          type: string
+          description: Vietnamese text (Primary)
+          example: 'Trình bày cơ chế phân bổ bộ nhớ trong Golang?'
+        en:
+          type: string
+          description: English translation
+          example: 'Explain memory allocation mechanisms in Golang?'
+
+    FollowUpRequest:
+      type: object
+      required:
+        - questionId
+        - candidateAnswer
+      properties:
+        questionId:
+          type: string
+          pattern: '^[a-fA-F\d]{24}$'
+          example: '65f1234567890abcdef12345'
+        candidateAnswer:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          example: 'Em sử dụng goroutine pool kết hợp sync.Pool để tái sử dụng buffer, tránh áp lực lên GC.'
+
+    FollowUpResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - shouldFollowUp
+            - gapAnalysis
+            - turnIndex
+            - maxTurns
+            - summary
+          properties:
+            shouldFollowUp:
+              type: boolean
+              example: true
+            followUpQuestion:
+              $ref: '#/components/schemas/LocalizedText'
+            gapAnalysis:
+              type: array
+              items:
+                type: string
+              example: ['Chưa giải thích về việc sync.Pool bị dọn dẹp mỗi chu kỳ GC']
+            difficultyAdjustment:
+              type: string
+              enum: [EASIER, SAME, HARDER]
+              example: 'SAME'
+            turnIndex:
+              type: integer
+              minimum: 0
+              maximum: 3
+              example: 1
+            maxTurns:
+              type: integer
+              example: 3
+            summary:
+              $ref: '#/components/schemas/LocalizedText'
+
+    ConversationTurnItem:
+      type: object
+      required:
+        - id
+        - questionId
+        - turnIndex
+        - role
+        - type
+        - content
+        - createdAt
+      properties:
+        id:
+          type: string
+          example: '65f9876543210fedcba98765'
+        questionId:
+          type: string
+          example: '65f1234567890abcdef12345'
+        turnIndex:
+          type: integer
+          minimum: 0
+          example: 1
+        role:
+          type: string
+          enum: [INTERVIEWER, CANDIDATE]
+          example: 'INTERVIEWER'
+        type:
+          type: string
+          enum: [INITIAL_QUESTION, FOLLOW_UP, ANSWER, HINT, SUMMARY]
+          example: 'FOLLOW_UP'
+        content:
+          $ref: '#/components/schemas/LocalizedText'
+        createdAt:
+          type: string
+          format: date-time
+
+    CodeExecutionRequest:
+      type: object
+      required:
+        - questionId
+        - code
+        - language
+      properties:
+        questionId:
+          type: string
+          pattern: '^[a-fA-F\d]{24}$'
+        code:
+          type: string
+          maxLength: 50000
+          example: 'function twoSum(nums, target) { ... }'
+        language:
+          type: string
+          enum: [javascript, typescript, python, java, go]
+          example: 'typescript'
+
+    CodeExecutionResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - stdout
+            - stderr
+            - exitCode
+            - executionTimeMs
+            - memoryKb
+          properties:
+            stdout:
+              type: string
+              example: 'All tests passed\n'
+            stderr:
+              type: string
+              example: ''
+            exitCode:
+              type: integer
+              example: 0
+            executionTimeMs:
+              type: number
+              example: 142.5
+            memoryKb:
+              type: number
+              example: 18450
+            testResults:
+              type: array
+              items:
+                type: object
+                properties:
+                  testCaseIndex:
+                    type: integer
+                  passed:
+                    type: boolean
+                  actualOutput:
+                    type: string
+                  expectedOutput:
+                    type: string
+                  isHidden:
+                    type: boolean
+            complexity:
+              type: object
+              properties:
+                timeComplexity:
+                  type: string
+                  example: 'O(N)'
+                spaceComplexity:
+                  type: string
+                  example: 'O(N)'
+                cyclomaticComplexity:
+                  type: integer
+                  example: 3
+
+    WhiteboardAnalysisRequest:
+      type: object
+      required:
+        - questionId
+        - imageBase64
+      properties:
+        questionId:
+          type: string
+          pattern: '^[a-fA-F\d]{24}$'
+        imageBase64:
+          type: string
+          description: Base64 data URL string (PNG, JPEG, WebP)
+          example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...'
+        canvasDataJson:
+          type: string
+          description: Optional raw canvas graph structure
+
+    WhiteboardAnalysisResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - detectedNodes
+            - issues
+            - tradeOffEvaluation
+            - score
+          properties:
+            detectedNodes:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  label:
+                    type: string
+            issues:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [SPOF, BOTTLENECK, CONSISTENCY, SECURITY, MISSING_TIER]
+                  severity:
+                    type: string
+                    enum: [HIGH, MEDIUM, LOW]
+                  title:
+                    $ref: '#/components/schemas/LocalizedText'
+                  description:
+                    $ref: '#/components/schemas/LocalizedText'
+                  suggestedFix:
+                    $ref: '#/components/schemas/LocalizedText'
+            tradeOffEvaluation:
+              $ref: '#/components/schemas/LocalizedText'
+            score:
+              type: number
+              minimum: 0
+              maximum: 10
+              example: 8.5
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+        - code
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: 'Cannot transition interview from COMPLETED to FOLLOW_UP.'
+        code:
+          type: string
+          example: 'AIU_STATE_CONFLICT'
+
+  responses:
+    400BadRequest:
+      description: Bad Request — Invalid input or payload constraint violated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    401Unauthorized:
+      description: Missing or expired Bearer JWT authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    403Forbidden:
+      description: Forbidden — Candidate does not own this interview session
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    404NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    409StateConflict:
+      description: Conflict — Illegal interview state machine transition
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    429RateLimited:
+      description: Too Many Requests — Rate limit or provider quota reached
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    502BadGateway:
+      description: Bad Gateway — AI Provider returned malformed output
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

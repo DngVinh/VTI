@@ -58,9 +58,10 @@ export const SystemPromptFormModal: React.FC<SystemPromptFormModalProps> = ({
           <h2 className="text-xl font-semibold text-gray-800">
             {initialData ? `Edit Prompt: ${initialData.promptKey} (v${initialData.version})` : 'Create New Draft'}
           </h2>
-          <button 
+          <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors text-2xl font-bold leading-none"
+            aria-label="Đóng modal"
+            className="text-gray-400 hover:text-gray-600 font-bold text-xl"
           >
             &times;
           </button>
@@ -70,8 +71,10 @@ export const SystemPromptFormModal: React.FC<SystemPromptFormModalProps> = ({
           <form id="prompt-form" onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex flex-col">
-                <label className="text-sm font-medium text-gray-700 mb-1">Prompt Key *</label>
+                <label htmlFor="promptKey" className="text-sm font-medium text-gray-700 mb-1">Prompt Key *</label>
                 <input
+                  id="promptKey"
+                  aria-label="Prompt Key"
                   type="text"
                   required
                   readOnly={!!initialData}

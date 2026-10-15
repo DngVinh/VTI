@@ -1,18 +1,15 @@
-import { IInterviewState, InterviewStatus } from './IInterviewState';
-
+import { IInterviewState, InterviewStatus, IInterviewContext, GeneratePayload, SubmitPayload } from './types';
 import { PendingState } from './states/PendingState';
-
-
-import { GeneratePayload, SubmitPayload } from './types';
 import { GeneratingState } from './states/GeneratingState';
 import { InProgressState } from './states/InProgressState';
 import { EvaluatingState } from './states/EvaluatingState';
 import { CompletedState } from './states/CompletedState';
 import { FailedState } from './states/FailedState';
+import { FollowUpState } from './states/FollowUpState';
 import { IInterviewRepository } from '../../repositories/IInterviewRepository';
 import { IEventPublisher } from '../events/IEventPublisher';
 
-export class InterviewContext {
+export class InterviewContext implements IInterviewContext {
   private state: IInterviewState;
   private interviewId: string;
   private repository: IInterviewRepository;
@@ -53,13 +50,17 @@ export class InterviewContext {
   /**
    * Chuyển đổi trạng thái và cập nhật xuống DB (có thể gọi hàm update trạng thái ở đây)
    */
-  public async changeState(newState: IInterviewState): Promise<void> {
+  public async changeState(newState: IInterviewState | InterviewStatus): Promise<void> {
+    const targetState: IInterviewState = typeof newState === 'string'
+      ? InterviewContext.createStateFromStatus(newState)
+      : newState;
     const currentStatus = this.state.getName();
-    const nextStatus = newState.getName();
+    const nextStatus = targetState.getName();
     const legalTransitions: Record<InterviewStatus, InterviewStatus[]> = {
       PENDING: ['GENERATING'],
       GENERATING: ['IN_PROGRESS', 'FAILED'],
-      IN_PROGRESS: ['EVALUATING', 'FAILED'],
+      IN_PROGRESS: ['FOLLOW_UP', 'EVALUATING', 'FAILED'],
+      FOLLOW_UP: ['IN_PROGRESS', 'EVALUATING', 'FAILED'],
       EVALUATING: ['COMPLETED', 'FAILED'],
       COMPLETED: [],
       FAILED: ['GENERATING', 'EVALUATING'],
@@ -86,7 +87,7 @@ export class InterviewContext {
       );
     }
 
-    this.state = newState;
+    this.state = targetState;
     this.version = nextVersion;
     
     // Publish state change event for SSE
@@ -128,6 +129,7 @@ export class InterviewContext {
       case 'PENDING': return new PendingState();
       case 'GENERATING': return new GeneratingState();
       case 'IN_PROGRESS': return new InProgressState();
+      case 'FOLLOW_UP': return new FollowUpState();
       case 'EVALUATING': return new EvaluatingState();
       case 'COMPLETED': return new CompletedState();
       case 'FAILED': return new FailedState();

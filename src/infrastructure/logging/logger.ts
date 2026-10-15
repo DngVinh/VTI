@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import { redact } from '../../utils/redaction';
 
-export const logContext = new AsyncLocalStorage<{ requestId?: string }>();
+export const logContext = new AsyncLocalStorage<{ requestId?: string; locale?: string }>();
 export const events = [
   'http.access', 'http.aborted', 'http.error.validation', 'http.error.authentication',
   'http.error.authorization', 'http.error.conflict', 'http.error.internal', 'http.error.request',
@@ -17,6 +17,7 @@ export type LogEvent = typeof events[number];
 type Level = 'info' | 'warn' | 'error';
 export interface LogFields {
   requestId?: string;
+  locale?: string;
   route?: string;
   method?: string;
   status?: number;
@@ -38,8 +39,13 @@ export function createLogger(sink: (line: string) => void = line => { process.st
     const safe: Record<string, unknown> = { timestamp: new Date().toISOString(), level, event };
     const descriptors = Object.getOwnPropertyDescriptors(fields);
     const scalar = (key: string): unknown => descriptors[key]?.value;
-    const requestId = logContext.getStore()?.requestId ?? scalar('requestId');
+    const store = logContext.getStore();
+    const requestId = store?.requestId ?? scalar('requestId');
     if (typeof requestId === 'string' && uuid.test(requestId)) safe.requestId = requestId;
+    const rawLocale = store?.locale ?? scalar('locale');
+    if (typeof rawLocale === 'string' && /^(?:vi|en)$/i.test(rawLocale)) {
+      safe.locale = rawLocale.toLowerCase();
+    }
     for (const key of ['status', 'durationMs', 'attempt']) {
       const value = scalar(key);
       if (typeof value === 'number' && Number.isFinite(value) && value >= 0) safe[key] = value;

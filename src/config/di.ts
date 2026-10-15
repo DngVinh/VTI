@@ -36,6 +36,7 @@ import {
   QuestionTaxonomyRepository,
 } from '../repositories/question-support.repository';
 import { QuestionEmbeddingRepository } from '../repositories/question-embedding.repository';
+import { ConversationTurnRepository } from '../repositories/ConversationTurnRepository';
 
 // Services
 
@@ -118,6 +119,9 @@ container.register('IQuestionIdempotencyRepository', { useClass: QuestionIdempot
 container.register('IQuestionOutboxRepository', { useClass: QuestionOutboxRepository });
 container.register('IQuestionTaxonomyRepository', { useClass: QuestionTaxonomyRepository });
 container.register('IQuestionEmbeddingRepository', { useClass: QuestionEmbeddingRepository });
+container.register('IConversationTurnRepository', {
+  useFactory: () => new ConversationTurnRepository(),
+});
 
 // Register AI Provider based on .env
 
@@ -239,4 +243,80 @@ container.registerSingleton(InterviewQuestionGenerationOrchestrator);
 container.register('InterviewQuestionGenerationOrchestrator', {
   useToken: InterviewQuestionGenerationOrchestrator,
 });
+
+// Code Sandbox & AST Review
+import { MockSandboxProvider } from '../services/code-sandbox/MockSandboxProvider';
+import { PistonSandboxProvider } from '../services/code-sandbox/PistonSandboxProvider';
+import { ComplexityAnalyzer } from '../services/code-sandbox/ComplexityAnalyzer';
+import { AiCodeReviewer } from '../services/code-sandbox/AiCodeReviewer';
+import { CodeExecutionController } from '../controllers/CodeExecutionController';
+
+container.registerSingleton(ComplexityAnalyzer);
+container.registerSingleton(AiCodeReviewer);
+container.registerSingleton(CodeExecutionController);
+
+container.register('PistonApiUrl', {
+  useValue: 'http://localhost:2000',
+});
+
+if (env.NODE_ENV === 'test') {
+  container.registerSingleton('ISandboxProvider', MockSandboxProvider);
+} else {
+  container.registerSingleton('ISandboxProvider', PistonSandboxProvider);
+}
+
+// System Design Whiteboard Vision
+import { GeminiVisionAnalyzer } from '../services/vision/GeminiVisionAnalyzer';
+import { WhiteboardController } from '../controllers/WhiteboardController';
+import { WhiteboardSnapshotModel } from '../models/WhiteboardSnapshot';
+
+container.register('WhiteboardSnapshotModel', {
+  useValue: WhiteboardSnapshotModel,
+});
+
+container.register('IVisionAiClient', {
+  useValue: {
+    analyzeMultimodal: async () => ({
+      data: {
+        detectedNodes: [
+          { type: 'LOAD_BALANCER', label: 'Load Balancer' },
+          { type: 'SERVICE', label: 'Core Service' },
+          { type: 'DATABASE', label: 'Primary DB' },
+        ],
+        issues: [
+          {
+            type: 'SPOF',
+            severity: 'HIGH',
+            title: { vi: 'Điểm nghẽn duy nhất', en: 'Single Point of Failure' },
+            description: { vi: 'Chưa có bản sao DB dự phòng', en: 'No standby replica' },
+            suggestedFix: { vi: 'Thêm Read Replica', en: 'Add Read Replica' },
+          },
+        ],
+        tradeOffEvaluation: { vi: 'Đánh giá đạt', en: 'Acceptable' },
+        score: 8.5,
+      },
+    }),
+  },
+});
+
+container.registerSingleton(GeminiVisionAnalyzer);
+container.registerSingleton(WhiteboardController);
+
+// Gemini Live Audio Stream
+import { GeminiLiveRelay } from '../infrastructure/websocket/GeminiLiveRelay';
+import { LiveAudioWebSocketServer } from '../infrastructure/websocket/websocketServer';
+import { CloudTtsService } from '../services/live-audio/CloudTtsService';
+import { AudioResampler } from '../services/live-audio/AudioResampler';
+
+container.register('ISpeechClient', {
+  useValue: {
+    synthesizeSpeech: async () => [{ audioContent: Buffer.alloc(1600) }],
+  },
+});
+
+container.registerSingleton(AudioResampler);
+container.registerSingleton(CloudTtsService);
+container.registerSingleton(GeminiLiveRelay);
+container.registerSingleton(LiveAudioWebSocketServer);
+
 export { container };

@@ -65,6 +65,18 @@ describe('interview API concurrency contracts', () => {
     expect(formData.has('userId')).toBe(false);
   });
 
+  it('creates interview session from practice questions', async () => {
+    apiMocks.request.mockResolvedValue({ _id: 'session-5', status: 'IN_PROGRESS' });
+    const questionIds = ['q-1', 'q-2'];
+
+    const result = await interviewApi.createSessionFromQuestions(questionIds);
+    expect(result).toEqual({ _id: 'session-5', status: 'IN_PROGRESS' });
+    expect(apiMocks.request).toHaveBeenCalledWith('interviews/practice-questions', {
+      method: 'POST',
+      body: JSON.stringify({ questionIds }),
+    });
+  });
+
   it('loads authenticated taxonomy data and safely encodes the role filter', async () => {
     const role = { _id: 'role-1', code: 'BE', name: 'Backend' };
     const level = { _id: 'level-1', code: 'INTERN', name: 'Intern' };
@@ -103,4 +115,32 @@ describe('interview API concurrency contracts', () => {
     }), { status: 422, headers: { 'Content-Type': 'application/json' } }));
     await expect(interviewApi.uploadJdInterview(new FormData())).rejects.toThrow('JD không hợp lệ');
   });
+
+  it('requests follow-up with questionId and candidateAnswer payload', async () => {
+    const mockResponse = { shouldFollowUp: true, turnIndex: 1, maxTurns: 3 };
+    apiMocks.request.mockResolvedValueOnce(mockResponse);
+
+    const result = await (interviewApi as any).requestFollowUp('session-6', {
+      questionId: 'q-1',
+      candidateAnswer: 'Candidate answer',
+    });
+
+    expect(result).toEqual(mockResponse);
+    expect(apiMocks.request).toHaveBeenCalledWith('interviews/session-6/follow-up', {
+      method: 'POST',
+      body: JSON.stringify({ questionId: 'q-1', candidateAnswer: 'Candidate answer' }),
+    });
+  });
+
+  it('fetches conversation history with optional questionId query', async () => {
+    const mockTurns = [{ turnIndex: 0, role: 'CANDIDATE', content: { vi: 'a', en: 'a' } }];
+    apiMocks.request.mockResolvedValueOnce(mockTurns);
+
+    const result = await (interviewApi as any).fetchConversationHistory('session-7', 'q-2');
+    expect(result).toEqual(mockTurns);
+    expect(apiMocks.request).toHaveBeenCalledWith('interviews/session-7/conversation?questionId=q-2', {
+      method: 'GET',
+    });
+  });
 });
+

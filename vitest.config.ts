@@ -8,6 +8,12 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30000,
     hookTimeout: 30000,
+    env: {
+      NODE_ENV: 'test',
+      JWT_ACCESS_SECRET: 'test_jwt_access_secret_key_at_least_32_characters_long_12345',
+      JWT_REFRESH_SECRET: 'test_jwt_refresh_secret_key_at_least_32_characters_long_67890',
+      PASSWORD_RESET_SECRET: 'test_password_reset_secret_at_least_32_chars_long_12345',
+    },
     include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',

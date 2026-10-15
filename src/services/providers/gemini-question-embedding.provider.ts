@@ -7,6 +7,7 @@ import {
   QuestionEmbeddingOutput,
   QuestionEmbeddingPayload,
 } from '../interfaces/IQuestionEmbeddingProvider';
+import { getEnv } from '../../config/env';
 
 @injectable()
 export class GeminiQuestionEmbeddingProvider implements IQuestionEmbeddingProvider {
@@ -17,15 +18,12 @@ export class GeminiQuestionEmbeddingProvider implements IQuestionEmbeddingProvid
   private maxRetries: number;
 
   constructor() {
-    const apiKey = process.env.GEMINI_API_KEY || '';
-    this.modelName =
-      process.env.QUESTION_BANK_EMBEDDING_MODEL || 'text-embedding-004';
-    this.dimensions = parseInt(
-      process.env.QUESTION_BANK_EMBEDDING_DIMENSIONS || '768',
-      10
-    );
-    this.timeoutMs = parseInt(process.env.QUESTION_BANK_AI_TIMEOUT_MS || '10000', 10);
-    this.maxRetries = parseInt(process.env.QUESTION_BANK_AI_MAX_RETRIES || '2', 10);
+    const env = getEnv();
+    const apiKey = env.GEMINI_API_KEY || '';
+    this.modelName = env.QUESTION_BANK_EMBEDDING_MODEL;
+    this.dimensions = env.QUESTION_BANK_EMBEDDING_DIMENSIONS;
+    this.timeoutMs = env.QUESTION_BANK_AI_TIMEOUT_MS;
+    this.maxRetries = env.QUESTION_BANK_AI_MAX_RETRIES;
 
     if (apiKey.trim()) {
       this.genAI = new GoogleGenerativeAI(apiKey);

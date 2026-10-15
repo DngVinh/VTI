@@ -4,6 +4,7 @@ import type { ApiError } from '../../../auth/types';
 import { questionBankApi } from '../api/questionBankApi';
 import type { QuestionReviewQueueItemDto, ReviewQueueResponse } from '../types';
 import { QuestionBankNav } from '../components/QuestionBankNav';
+import { AppShell } from '../../../layouts/AppShell';
 
 const emptyResult: ReviewQueueResponse = {
   items: [],
@@ -47,8 +48,9 @@ export const QuestionReviewQueuePage = () => {
   }, [load, retryKey]);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <AppShell>
+      <main className="px-4 py-8">
+        <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <Link className="font-bold text-indigo-700 hover:underline" to="/admin/question-bank">← Question Bank</Link>
@@ -99,5 +101,6 @@ export const QuestionReviewQueuePage = () => {
         )}
       </div>
     </main>
-  );
+  </AppShell>
+);
 };

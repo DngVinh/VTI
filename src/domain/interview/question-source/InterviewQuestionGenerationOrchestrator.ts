@@ -22,11 +22,13 @@ import { QuestionBankInterviewQuestionSource } from './QuestionBankInterviewQues
 import { HybridInterviewQuestionSource } from './HybridInterviewQuestionSource';
 import { InterviewQuestionBundleValidator } from './InterviewQuestionBundleValidator';
 import { AppError } from '../../../utils/AppError';
+import { logger } from '../../../infrastructure/logging/logger';
 import { InterviewQuestionModel } from '../../../models/InterviewQuestion';
 import {
   QuestionSourcingTelemetryService,
   sanitizeQuestionSourcingReasonCode,
 } from '../../../services/question-sourcing-telemetry.service';
+import { getEnv } from '../../../config/env';
 
 @injectable()
 export class InterviewQuestionGenerationOrchestrator {
@@ -42,10 +44,8 @@ export class InterviewQuestionGenerationOrchestrator {
   ) {
     this.aiSource = new AiInterviewQuestionSource(this.aiProvider);
     this.bankSource = new QuestionBankInterviewQuestionSource(this.selector);
-    const hybridBankCount = parseInt(
-      process.env.INTERVIEW_QUESTION_BANK_HYBRID_BANK_COUNT || '2',
-      10
-    );
+    const env = getEnv();
+    const hybridBankCount = env.INTERVIEW_QUESTION_BANK_HYBRID_BANK_COUNT;
     this.hybridSource = new HybridInterviewQuestionSource(
       this.selector,
       this.aiProvider,
@@ -54,22 +54,14 @@ export class InterviewQuestionGenerationOrchestrator {
   }
 
   public getRolloutDecision(sessionId?: string): RolloutDecision {
+    const env = getEnv();
     const config: SourcePolicyConfig = {
-      enabled:
-        process.env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED === 'true' ||
-        process.env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED === '1',
-      mode: process.env.INTERVIEW_QUESTION_SOURCE_MODE || 'AI_ONLY',
-      policyVersion: process.env.INTERVIEW_QUESTION_BANK_POLICY_VERSION || 'v1',
-      hybridBankCount: parseInt(
-        process.env.INTERVIEW_QUESTION_BANK_HYBRID_BANK_COUNT || '2',
-        10
-      ),
-      rolloutPercent:
-        process.env.INTERVIEW_QUESTION_BANK_ROLLOUT_PERCENT !== undefined
-          ? parseInt(process.env.INTERVIEW_QUESTION_BANK_ROLLOUT_PERCENT, 10)
-          : 100,
-      rolloutSalt:
-        process.env.INTERVIEW_QUESTION_BANK_ROLLOUT_SALT || 'qb-rollout-salt',
+      enabled: env.INTERVIEW_QUESTION_BANK_INTEGRATION_ENABLED,
+      mode: (env as any).INTERVIEW_QUESTION_SOURCE_MODE || 'AI_ONLY',
+      policyVersion: env.INTERVIEW_QUESTION_BANK_POLICY_VERSION,
+      hybridBankCount: env.INTERVIEW_QUESTION_BANK_HYBRID_BANK_COUNT,
+      rolloutPercent: env.INTERVIEW_QUESTION_BANK_ROLLOUT_PERCENT,
+      rolloutSalt: env.INTERVIEW_QUESTION_BANK_ROLLOUT_SALT,
     };
     return resolveRolloutDecision(config, sessionId);
   }
@@ -90,7 +82,7 @@ export class InterviewQuestionGenerationOrchestrator {
     const startTime = Date.now();
     const rolloutDecision = this.getRolloutDecision(interviewId);
     const effectiveMode = rolloutDecision.effectiveMode;
-    const policyVersion = process.env.INTERVIEW_QUESTION_BANK_POLICY_VERSION || 'v1';
+    const policyVersion = getEnv().INTERVIEW_QUESTION_BANK_POLICY_VERSION;
 
     await QuestionSourcingTelemetryService.recordEvent({
       sessionId: interviewId,
@@ -120,10 +112,7 @@ export class InterviewQuestionGenerationOrchestrator {
           const aiResult = await this.aiSource.generateQuestions(context);
           candidateQuestions = aiResult.questions;
           auditTokens = aiResult.audit;
-          const shadowTimeoutMs = Number.parseInt(
-            process.env.INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS || '3000',
-            10,
-          );
+          const shadowTimeoutMs = getEnv().INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS;
           const shadowStart = Date.now();
           try {
             const shadowPromise = this.bankSource.generateQuestions(context);
@@ -253,8 +242,7 @@ export class InterviewQuestionGenerationOrchestrator {
     const startTime = Date.now();
     const rolloutDecision = this.getRolloutDecision(interviewId);
     const effectiveMode = rolloutDecision.effectiveMode;
-    const policyVersion =
-      process.env.INTERVIEW_QUESTION_BANK_POLICY_VERSION || 'v1';
+    const policyVersion = getEnv().INTERVIEW_QUESTION_BANK_POLICY_VERSION;
 
     await QuestionSourcingTelemetryService.recordEvent({
       sessionId: interviewId,
@@ -400,10 +388,7 @@ export class InterviewQuestionGenerationOrchestrator {
           auditTokens = aiRes.audit;
 
           // Shadow: run question bank selection safely with bounded timeout
-          const shadowTimeoutMs = parseInt(
-            process.env.INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS || '3000',
-            10
-          );
+          const shadowTimeoutMs = getEnv().INTERVIEW_QUESTION_BANK_SHADOW_TIMEOUT_MS;
           const shadowStart = Date.now();
 
           try {
@@ -557,7 +542,7 @@ export class InterviewQuestionGenerationOrchestrator {
           });
         }
       } catch (statusErr) {
-        console.error(`[Orchestrator] Failed to transition to FAILED state:`, statusErr);
+        logger.error('interview.retry_generation');
       }
       throw err;
     }

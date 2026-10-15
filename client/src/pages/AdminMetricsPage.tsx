@@ -8,6 +8,8 @@ import {
 import type {
   AdminMetricsDateRange
 } from '../features/AdminMetrics/types';
+import { AppShell } from '../layouts/AppShell';
+import { useTranslation } from '../locales/I18nContext';
 
 const formatDateForInput = (value: string) => {
   const date = new Date(value);
@@ -36,6 +38,7 @@ const toEndExclusiveIso = (value: string) => {
 };
 
 export const AdminMetricsPage = () => {
+  const { t } = useTranslation();
   const {
     dateRange,
     metrics,
@@ -87,58 +90,58 @@ export const AdminMetricsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Decorative background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-32 top-20 h-96 w-96 rounded-full bg-purple-300 opacity-30 blur-3xl" />
-
-        <div className="absolute -right-32 top-40 h-96 w-96 rounded-full bg-blue-300 opacity-30 blur-3xl" />
-
-        <div className="absolute bottom-0 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-indigo-300 opacity-20 blur-3xl" />
-      </div>
-
-      <main className="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <AppShell>
+      <div className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-              <span className="bg-indigo-100 p-2 rounded-xl text-indigo-600">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </span>
-              Dashboard Thống Kê
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-600" />
+              {t('admin.overviewBadge', 'Admin Overview')}
+            </div>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl">
+              {t('admin.dashboardTitle', 'Dashboard Thống Kê')}
             </h1>
-            <p className="mt-2 text-slate-500 font-medium">Tổng quan hệ thống và chỉ số hiệu suất AI</p>
+            <p className="mt-1 text-slate-500 text-sm">
+              {t('admin.dashboardSubtitle', 'Tổng quan toàn bộ người dùng, số phiên phỏng vấn và lượng token AI tiêu thụ.')}
+            </p>
           </div>
-          <div className="flex gap-3">
-            <Link to="/admin/system-prompts" className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium shadow hover:bg-indigo-700 transition">
-              Quản lý Prompts
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Link
+              to="/admin/users"
+              className="px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-xl text-sm font-semibold shadow-xs hover:bg-slate-50 transition"
+            >
+              {t('admin.manageUsers', 'Quản lý Users')}
             </Link>
-            <Link to="/admin/users" className="px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-lg font-medium shadow-sm hover:bg-indigo-50 transition">
-              Quản lý Users
+            <Link
+              to="/admin/system-prompts"
+              className="px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-xl text-sm font-semibold shadow-xs hover:bg-slate-50 transition"
+            >
+              {t('admin.systemPrompts', 'System Prompts')}
             </Link>
             <button
               onClick={handleReload}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:text-indigo-600 transition-all active:scale-95"
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-xs hover:bg-indigo-700 transition"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              Tải lại
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {t('admin.reload', 'Tải lại')}
             </button>
           </div>
         </div>
 
         {/* Main card */}
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
+        <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-xs">
           {/* Filters */}
           <div className="border-b border-slate-100 p-6">
             <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto]">
               <div>
                 <label
                   htmlFor="metrics-from"
-                  className="mb-2 block text-sm font-bold text-slate-700"
+                  className="mb-1.5 block text-xs font-bold text-slate-700 uppercase tracking-wider"
                 >
-                  From
+                  {t('admin.fromDate', 'Từ ngày')}
                 </label>
 
                 <input
@@ -148,16 +151,16 @@ export const AdminMetricsPage = () => {
                   onChange={(event) =>
                     setFrom(event.target.value)
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="metrics-to"
-                  className="mb-2 block text-sm font-bold text-slate-700"
+                  className="mb-1.5 block text-xs font-bold text-slate-700 uppercase tracking-wider"
                 >
-                  To
+                  {t('admin.toDate', 'Đến ngày')}
                 </label>
 
                 <input
@@ -167,7 +170,7 @@ export const AdminMetricsPage = () => {
                   onChange={(event) =>
                     setTo(event.target.value)
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 />
               </div>
 
@@ -175,9 +178,9 @@ export const AdminMetricsPage = () => {
                 type="button"
                 onClick={handleApply}
                 disabled={isLoading}
-                className="self-end rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="self-end rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Apply
+                {t('admin.apply', 'Áp dụng')}
               </button>
             </div>
 
@@ -199,7 +202,7 @@ export const AdminMetricsPage = () => {
 
               {isLoading && !error && (
                 <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700">
-                  Loading system metrics...
+                  {t('admin.loadingMetrics', 'Đang tải dữ liệu thống kê...')}
                 </div>
               )}
             </div>
@@ -209,41 +212,40 @@ export const AdminMetricsPage = () => {
             {!metrics && !isLoading ? (
               <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
                 <p className="text-sm font-semibold text-slate-500">
-                  No metrics available for the selected period.
+                  {t('admin.noMetrics', 'Không có số liệu cho khoảng thời gian đã chọn.')}
                 </p>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {/* User metrics */}
                 <section>
                   <div className="mb-4">
-                    <h2 className="text-xl font-extrabold text-slate-900">
-                      Users
+                    <h2 className="text-lg font-bold text-slate-900">
+                      {t('admin.usersTitle', 'Người dùng (Users)')}
                     </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      Current user account snapshot.
+                    <p className="text-xs text-slate-500">
+                      {t('admin.usersSubtitle', 'Tổng số tài khoản trong hệ thống')}
                     </p>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <MetricCard
-                      label="Total Users"
+                      label={t('admin.totalUsers', 'Tổng người dùng')}
                       value={metrics?.users.total ?? 0}
                     />
 
                     <MetricCard
-                      label="Active"
+                      label={t('admin.activeUsers', 'Hoạt động (Active)')}
                       value={metrics?.users.active ?? 0}
                     />
 
                     <MetricCard
-                      label="Locked"
+                      label={t('admin.lockedUsers', 'Bị khóa (Locked)')}
                       value={metrics?.users.locked ?? 0}
                     />
 
                     <MetricCard
-                      label="Inactive"
+                      label={t('admin.inactiveUsers', 'Chưa kích hoạt (Inactive)')}
                       value={metrics?.users.inactive ?? 0}
                     />
                   </div>
@@ -252,21 +254,20 @@ export const AdminMetricsPage = () => {
                 {/* Interview metrics */}
                 <section>
                   <div className="mb-4">
-                    <h2 className="text-xl font-extrabold text-slate-900">
-                      Interviews
+                    <h2 className="text-lg font-bold text-slate-900">
+                      {t('admin.interviewsTitle', 'Phiên phỏng vấn (Interviews)')}
                     </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      Interview sessions created in the selected period.
+                    <p className="text-xs text-slate-500">
+                      {t('admin.interviewsSubtitle', 'Số phiên thi được khởi tạo trong khoảng thời gian đã chọn')}
                     </p>
                   </div>
 
-                  <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                    <div className="text-sm font-bold text-slate-500">
-                      Total Interviews
+                  <div className="mb-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5">
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      {t('admin.totalInterviews', 'Tổng số phiên phỏng vấn')}
                     </div>
 
-                    <div className="mt-2 text-3xl font-extrabold text-slate-900">
+                    <div className="mt-2 text-3xl font-black text-slate-900">
                       {metrics?.interviews.total ?? 0}
                     </div>
                   </div>
@@ -325,12 +326,11 @@ export const AdminMetricsPage = () => {
                 {/* Token metrics */}
                 <section>
                   <div className="mb-4">
-                    <h2 className="text-xl font-extrabold text-slate-900">
-                      AI Token Usage
+                    <h2 className="text-lg font-bold text-slate-900">
+                      Tiêu thụ AI Tokens
                     </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      Token usage aggregated from interview sessions.
+                    <p className="text-xs text-slate-500">
+                      Tổng lượng token sử dụng cho sinh câu hỏi và chấm điểm
                     </p>
                   </div>
 
@@ -364,8 +364,8 @@ export const AdminMetricsPage = () => {
             )}
           </div>
         </section>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 };
 
@@ -379,12 +379,12 @@ const MetricCard = ({
   value
 }: MetricCardProps) => {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-sm font-bold text-slate-500">
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
         {label}
       </div>
 
-      <div className="mt-2 text-3xl font-extrabold text-slate-900">
+      <div className="mt-2 text-2xl font-black text-slate-900">
         {value.toLocaleString()}
       </div>
     </div>
@@ -401,12 +401,12 @@ const StatusCard = ({
   value
 }: StatusCardProps) => {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-sm font-bold text-slate-500">
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
         {label}
       </div>
 
-      <div className="mt-2 text-2xl font-extrabold text-slate-900">
+      <div className="mt-2 text-2xl font-black text-indigo-600">
         {value.toLocaleString()}
       </div>
     </div>

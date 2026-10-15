@@ -1,5 +1,5 @@
 import { injectable } from 'tsyringe';
-import { IAiProvider, InterviewSetupPayload, AnswerPayload } from '../../../domain/interview/types';
+import { IAiProvider, InterviewSetupPayload, AnswerPayload, LocalizedContent, SystemPromptContext } from '../../../domain/interview/types';
 import { logger } from '../../../infrastructure/logging/logger';
 import {
   DIMENSIONS,
@@ -47,7 +47,7 @@ export class MockAiProvider implements IAiProvider {
         },
       })),
       overallScore: 8,
-      dimensions: DIMENSIONS.map((name) => ({
+      dimensions: DIMENSIONS.slice(0, 4).map((name) => ({
         name,
         score: 8,
         reasoning: 'Demonstrates technical understanding.',
@@ -66,4 +66,33 @@ export class MockAiProvider implements IAiProvider {
       audit: { promptTokenCount: 20, candidatesTokenCount: 100, totalTokenCount: 120 },
     };
   }
+
+  async generateFollowUp(
+    originalQuestion: LocalizedContent,
+    candidateAnswer: string,
+    history: Array<{ role: string; content: string }>,
+    systemPrompt?: SystemPromptContext
+  ) {
+    logger.info('ai.generating');
+    const isShort = candidateAnswer.trim().length < 50;
+    const shouldFollowUp = isShort;
+    return {
+      data: {
+        shouldFollowUp,
+        followUpQuestion: shouldFollowUp ? {
+          vi: 'Bạn có thể giải thích chi tiết hơn về cơ chế hoạt động thực tế không?',
+          en: 'Can you explain in more detail about how it works under the hood?',
+        } : undefined,
+        gapAnalysis: shouldFollowUp ? ['Thiếu chi tiết kỹ thuật chuyên sâu.'] : [],
+        difficultyAdjustment: 'SAME' as const,
+        confidenceScore: 0.85,
+        summary: {
+          vi: shouldFollowUp ? 'Câu trả lời chưa đủ chi tiết kỹ thuật.' : 'Câu trả lời đầy đủ và đạt yêu cầu.',
+          en: shouldFollowUp ? 'Answer lacks in-depth technical details.' : 'Answer is comprehensive and meets requirements.',
+        },
+      },
+      audit: { promptTokenCount: 15, candidatesTokenCount: 35, totalTokenCount: 50 },
+    };
+  }
 }
+

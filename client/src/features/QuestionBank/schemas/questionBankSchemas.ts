@@ -146,3 +146,54 @@ export const validateQuestionDraft = (
   return { valid: Object.keys(errors).length === 0, errors };
 };
 
+export const validateQuestionForLibrary = (
+  value: QuestionVersionInput
+): DraftValidationResult => {
+  const result = validateQuestionDraft(value, true);
+  const errors = { ...result.errors };
+  const promptVi = value.content.prompt.vi.trim();
+  const promptEn = value.content.prompt.en.trim();
+
+  if (!promptVi && !promptEn) errors['content.prompt'] ??= 'Cần nhập câu hỏi';
+  if (!value.classification.type) errors['classification.type'] ??= 'Cần chọn loại câu hỏi';
+  if (!value.classification.difficulty) errors['classification.difficulty'] ??= 'Cần chọn độ khó';
+  if (promptVi && !value.answer.referenceAnswer.vi.trim()) {
+    errors['answer.referenceAnswer.vi'] ??= 'Cần nhập đáp án tham khảo VI';
+  }
+  if (promptEn && !value.answer.referenceAnswer.en.trim()) {
+    errors['answer.referenceAnswer.en'] ??= 'Cần nhập đáp án tham khảo EN';
+  }
+  const explanation = value.content.explanation ?? { vi: '', en: '' };
+  if (promptVi && !explanation.vi.trim()) {
+    errors['content.explanation.vi'] ??= 'Cần nhập giải thích VI';
+  }
+  if (promptEn && !explanation.en.trim()) {
+    errors['content.explanation.en'] ??= 'Cần nhập giải thích EN';
+  }
+  if (promptVi && !value.answer.learningObjective.vi.trim()) {
+    errors['answer.learningObjective.vi'] ??= 'Cần nhập mục tiêu đánh giá VI';
+  }
+  if (promptEn && !value.answer.learningObjective.en.trim()) {
+    errors['answer.learningObjective.en'] ??= 'Cần nhập mục tiêu đánh giá EN';
+  }
+  if (value.rubric.length < 2) {
+    errors.rubric ??= 'Cần có ít nhất 2 tiêu chí rubric chuẩn';
+  }
+  value.rubric.forEach((criterion, criterionIndex) => {
+    if (!criterion.title.vi.trim() && !criterion.title.en.trim()) {
+      errors[`rubric.${criterionIndex}.title`] ??= 'Cần nhập tiêu đề rubric';
+    }
+    const scores = new Set(criterion.levels.map((level) => level.score));
+    if (criterion.levels.length !== 5 || [0, 1, 2, 3, 4].some((score) => !scores.has(score))) {
+      errors[`rubric.${criterionIndex}.levels`] ??= 'Rubric cần đủ 5 mức điểm từ 0 đến 4';
+    }
+    criterion.levels.forEach((level, levelIndex) => {
+      if (!level.description.vi.trim() && !level.description.en.trim()) {
+        errors[`rubric.${criterionIndex}.levels.${levelIndex}`] ??= 'Cần nhập mô tả mức điểm';
+      }
+    });
+  });
+
+  return { valid: Object.keys(errors).length === 0, errors };
+};
+

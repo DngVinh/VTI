@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { authenticatedFetch, request } from '../../auth/apiClient';
+import type { ConversationTurn, FollowUpResponseData } from '../../features/InterviewRoom/types';
 
 export interface BaseEntity {
   _id: string;
@@ -198,6 +199,18 @@ export const interviewApi = {
   },
 
   /**
+   * Create interview session from selected question bank questions
+   */
+  createSessionFromQuestions: async (
+    questionIds: string[]
+  ): Promise<InterviewSessionData> => {
+    return request<InterviewSessionData>('interviews/practice-questions', {
+      method: 'POST',
+      body: JSON.stringify({ questionIds }),
+    });
+  },
+
+  /**
    * Upload JD file for interview setup
    */
   uploadJdInterview: async (
@@ -298,17 +311,18 @@ export const interviewApi = {
    */
   saveInterviewProgress: async (
     sessionId: string,
-    expectedVersion: number,
+    expectedVersion: number | undefined,
     answers: any[]
   ): Promise<any> => {
+    const payload: Record<string, any> = { answers };
+    if (typeof expectedVersion === 'number' && expectedVersion > 0) {
+      payload.expectedVersion = expectedVersion;
+    }
     return request<any>(
       `interviews/${sessionId}/progress`,
       {
         method: 'POST',
-        body: JSON.stringify({
-          expectedVersion,
-          answers,
-        }),
+        body: JSON.stringify(payload),
       }
     );
   },
@@ -338,9 +352,13 @@ export const interviewApi = {
    */
   submitInterview: async (
     sessionId: string,
-    expectedVersion: number,
+    expectedVersion: number | undefined,
     answers: any[]
   ): Promise<any> => {
+    const payload: Record<string, any> = { answers };
+    if (typeof expectedVersion === 'number' && expectedVersion >= 0) {
+      payload.expectedVersion = expectedVersion;
+    }
     return request<any>(
       `interviews/${sessionId}/submit`,
       {
@@ -351,10 +369,7 @@ export const interviewApi = {
             'submit'
           ),
         },
-        body: JSON.stringify({
-          expectedVersion,
-          answers,
-        }),
+        body: JSON.stringify(payload),
       }
     );
   },
@@ -367,6 +382,110 @@ export const interviewApi = {
   ): Promise<InterviewAnalyticsResult> => {
     return request<InterviewAnalyticsResult>(
       `interviews/analytics${buildAnalyticsQuery(query)}`
+    );
+  },
+
+  /**
+   * Submit candidate answer for turn-by-turn Socratic follow-up
+   */
+  requestFollowUp: async (
+    sessionId: string,
+    payload: { questionId: string; candidateAnswer: string }
+  ): Promise<FollowUpResponseData> => {
+    return request<FollowUpResponseData>(
+      `interviews/${sessionId}/follow-up`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  /**
+   * Fetch dialogue turns between AI interviewer and candidate
+   */
+  fetchConversationHistory: async (
+    sessionId: string,
+    questionId?: string
+  ): Promise<ConversationTurn[]> => {
+    const query = questionId ? `?questionId=${encodeURIComponent(questionId)}` : '';
+    return request<ConversationTurn[]>(
+      `interviews/${sessionId}/conversation${query}`,
+      {
+        method: 'GET',
+      }
+    );
+  },
+
+  /**
+   * Execute code in sandbox with optional AI review
+   */
+  executeCode: async (
+    sessionId: string,
+    payload: {
+      questionId: string;
+      code: string;
+      language: string;
+      testCases?: Array<{ input: string; expectedOutput: string; isHidden?: boolean }>;
+      withAiReview?: boolean;
+    }
+  ): Promise<{
+    execution: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+      executionTimeMs: number;
+      memoryKb: number;
+      testResults?: Array<{
+        testCaseIndex: number;
+        passed: boolean;
+        actualOutput: string;
+        expectedOutput: string;
+        executionTimeMs: number;
+        isHidden: boolean;
+      }>;
+    };
+    review?: {
+      astComplexity: {
+        estimatedTimeComplexity: string;
+        estimatedSpaceComplexity: string;
+        cyclomaticComplexity: number;
+        maxLoopNesting: number;
+        hasRecursion: boolean;
+        detectedSmells: string[];
+      };
+      feedback: { vi: string; en: string };
+      suggestions: Array<{ vi: string; en: string }>;
+      cleanCodeScore: number;
+    };
+  }> => {
+    return request(
+      `interviews/${sessionId}/execute-code`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  /**
+   * Submit whiteboard canvas snapshot for vision architecture critique
+   */
+  submitWhiteboardSnapshot: async (
+    sessionId: string,
+    payload: {
+      questionId: string;
+      imageBase64: string;
+      mimeType?: string;
+      canvasData?: any;
+    }
+  ): Promise<{ snapshotId: string; analysis: any }> => {
+    return request(
+      `interviews/${sessionId}/whiteboard`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
     );
   },
 };

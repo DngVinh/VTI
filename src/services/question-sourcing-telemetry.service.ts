@@ -10,6 +10,7 @@ import {
   INTERVIEW_SOURCE_ERROR_CODES,
   InterviewQuestionSourceMode,
 } from '../domain/interview/question-source/types';
+import { getEnv } from '../config/env';
 
 const SAFE_REASON_CODES = new Set<string>([
   ...Object.values(INTERVIEW_SOURCE_ERROR_CODES),
@@ -63,10 +64,7 @@ export interface RecordSourcingEventInput {
 
 export class QuestionSourcingTelemetryService {
   public static isTelemetryEnabled(): boolean {
-    return (
-      process.env.QUESTION_SOURCING_TELEMETRY_ENABLED !== 'false' &&
-      process.env.QUESTION_SOURCING_TELEMETRY_ENABLED !== '0'
-    );
+    return getEnv().QUESTION_SOURCING_TELEMETRY_ENABLED;
   }
 
   public static async recordEvent(
@@ -128,7 +126,6 @@ export class QuestionSourcingTelemetryService {
 
       return event;
     } catch (err) {
-      console.error('[QuestionSourcingTelemetry] Failed to record event');
       return null;
     }
   }

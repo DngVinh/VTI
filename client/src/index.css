@@ -31,3 +31,24 @@
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* Modern SaaS Background Utilities */
+.hero-ambient-bg {
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.16), rgba(168, 85, 247, 0.10) 45%, transparent 80%),
+    radial-gradient(circle at 1.5px 1.5px, rgba(99, 102, 241, 0.12) 1.5px, transparent 0);
+  background-size: 100% 100%, 32px 32px;
+}
+
+.hero-glow-center {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.18) 45%, transparent 70%);
+}
+
+.hero-glow-left {
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.22) 0%, transparent 70%);
+}
+
+.hero-glow-right {
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.22) 0%, transparent 70%);
+}
